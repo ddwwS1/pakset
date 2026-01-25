@@ -1,8 +1,0 @@
-# Ignore everything
-*
-
-# Allow only these
-!index.html
-!css/
-!js/
-!images/
