@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factory Floor Management System</title>
+    <link rel="stylesheet" href="../css/workfloor.css">
+</head>
+<body>
+    <div class="app">
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <h1>Factory Floor Management System</h1>
+                <p>Monitor and manage machines, workers, and floor operations</p>
+            </div>
+
+            <!-- Shift Progress Bar -->
+            <div class="shift-progress-container">
+                <div class="shift-info">
+                    <span class="shift-label">Current Shift Progress</span>
+                    <span class="shift-time" id="shiftTime">0:00 / 8:00</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <!-- Edit Mode Toggle -->
+                <div class="stat-card clickable" id="editModeToggle">
+                    <div class="stat-content">
+                        <div class="stat-icon" id="editIcon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="stat-label">Edit Mode</p>
+                            <p class="stat-value" id="editModeText">OFF</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Running Machines -->
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-icon stat-icon-inset">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="stat-label">Running</p>
+                            <p class="stat-value" id="runningCount">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total Workers -->
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-icon stat-icon-inset">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="stat-label">Workers</p>
+                            <p class="stat-value" id="workerCount">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Maintenance -->
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-icon stat-icon-inset">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="stat-label">Maintenance</p>
+                            <p class="stat-value" id="maintenanceCount">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Avg Efficiency -->
+                <div class="stat-card">
+                    <div class="stat-content">
+                        <div class="stat-icon stat-icon-inset">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="stat-label">Avg Efficiency</p>
+                            <p class="stat-value" id="avgEfficiency">0%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Machine -->
+                <div class="stat-card clickable" id="addMachineCard">
+                    <button class="add-btn" id="addMachineBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Add Machine</span>
+                    </button>
+                    <div class="add-machine-form" id="addMachineForm" style="display: none;">
+                        <input type="text" id="machineName" placeholder="Machine name" class="form-input">
+                        <select id="machineType" class="form-input">
+                            <option value="Injection Molding - Vertical">Injection Molding - Vertical</option>
+                            <option value="Injection Molding - Horizontal">Injection Molding - Horizontal</option>
+                            <option value="Injection Molding - Rotary">Injection Molding - Rotary</option>
+                            <option value="Injection Molding - Multi-Component">Injection Molding - Multi-Component</option>
+                            <option value="Insert Molding Machine">Insert Molding Machine</option>
+                            <option value="Blow Molding Machine">Blow Molding Machine</option>
+                            <option value="Custom Machine">Custom Machine</option>
+                        </select>
+                        <input type="text" id="customMachineType" placeholder="Enter custom type" class="form-input" style="display: none;">
+                        <div class="form-buttons">
+                            <button class="form-btn form-btn-primary" id="addMachineConfirm">Add</button>
+                            <button class="form-btn form-btn-secondary" id="addMachineCancel">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Grid -->
+            <div class="main-grid">
+                <!-- Factory Floor Map -->
+                <div class="factory-floor-section">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2>Factory Floor</h2>
+                            <button class="icon-btn" id="addTagBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span id="addTagText">Add Tag</span>
+                            </button>
+                        </div>
+                        <div class="factory-floor-map" id="factoryFloorMap">
+                            <!-- Room boxes will be added by JS -->
+                            <div id="roomsContainer"></div>
+                            <!-- Machines and tags will be added by JS -->
+                        </div>
+                        <div class="legend">
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #10b981;"></div>
+                                <span>Running</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #fbbf24;"></div>
+                                <span>Idle</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #fb923c;"></div>
+                                <span>Maintenance</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #ef4444;"></div>
+                                <span>Offline</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Machines List -->
+                <div class="machines-section">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2>Machines</h2>
+                        </div>
+                        <div class="scrollable-list" id="machinesList">
+                            <!-- Machines will be added by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Workers Panel -->
+                <div class="workers-section">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2>Workers</h2>
+                            <button class="icon-btn" id="addWorkerBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span>Add Worker</span>
+                            </button>
+                        </div>
+                        <div class="scrollable-list" id="workersList">
+                            <!-- Workers will be added by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/workfloor.js"></script>
+</body>
+</html>
