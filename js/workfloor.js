@@ -1572,8 +1572,8 @@ function init() {
         console.error('Error initializing schedule range', e);
     }
     
-    // Update shift progress every minute
-    setInterval(updateShiftProgress, 60000);
+    // Update shift progress every second (real-time countdown)
+    setInterval(updateShiftProgress, 1000);
 }
 
 // Start the app
