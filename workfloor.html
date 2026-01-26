@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Factory Floor Management System</title>
-    <link rel="icon" type="image/png" href="assets/icons/logos/pakset-logo.png">
+    <link rel="icon" type="image/png" href="assets/icons/logos/PAKSET-black-logo-e.png">
     <link rel="stylesheet" href="css/workfloor.css">
 </head>
 <body>
@@ -12,8 +12,11 @@
         <div class="container">
             <!-- Header -->
             <div class="header">
-                <h1>Factory Floor Management System</h1>
-                <p>Monitor and manage machines, workers, and floor operations</p>
+                <img class="header-logo" src="assets/icons/logos/PAKSET-black-logo-e.png" alt="Pakset logo">
+                <div class="header-text">
+                    <h1>Factory Floor Management System</h1>
+                    <p>Monitor and manage machines, workers, and floor operations</p>
+                </div>
             </div>
 
             <!-- Debug / Schedule Fetch Info -->
@@ -26,7 +29,10 @@
             <!-- Shift Progress Bar -->
             <div class="shift-progress-container">
                 <div class="shift-info">
-                    <span class="shift-label">Current Shift Progress</span>
+                    <div class="shift-left">
+                        <span class="shift-label">Current Shift Progress</span>
+                        <span class="shift-next" id="nextShiftIn">Next shift in: —</span>
+                    </div>
                     <div style="text-align:right;">
                         <div class="shift-name-small" id="shiftName">—</div>
                         <div class="shift-time" id="shiftTime">Start: —  End: —</div>
@@ -36,22 +42,25 @@
                     <div class="progress-fill" id="progressFill"></div>
                     <div class="progress-overtime-area" id="progressOvertimeArea"></div>
                     <div class="progress-overtime-fill" id="progressOvertimeFill"></div>
+                    <div class="progress-pulse" aria-hidden="true"></div>
                     <svg id="progressSeamSvg" aria-hidden="true" class="progress-seam-svg" viewBox="0 0 64 100" preserveAspectRatio="none">
                         <defs>
                             <linearGradient id="seamGrad" x1="0" x2="1" y1="0" y2="0">
-                                <!-- Yellow band ends closer to the middle: tighten stops -->
+                                <!-- Wider transparent padding + stronger yellow band -->
                                 <stop offset="0%" stop-color="#4299e1" stop-opacity="0" />
-                                <stop offset="18%" stop-color="#4299e1" stop-opacity="0.6" />
-                                <stop offset="30%" stop-color="#4299e1" stop-opacity="0.25" />
-                                <stop offset="36%" stop-color="#f6e05e" stop-opacity="0.9" />
-                                <stop offset="44%" stop-color="#f6e05e" stop-opacity="1" />
-                                <stop offset="50%" stop-color="#f6e05e" stop-opacity="0.9" />
-                                <stop offset="56%" stop-color="#fb923c" stop-opacity="0.5" />
-                                <stop offset="70%" stop-color="#fb923c" stop-opacity="0.18" />
+                                <stop offset="42%" stop-color="#4299e1" stop-opacity="0" />
+                                <stop offset="52%" stop-color="#4299e1" stop-opacity="0.7" />
+                                <stop offset="60%" stop-color="#4299e1" stop-opacity="0.35" />
+                                <stop offset="60%" stop-color="#fde047" stop-opacity="1" />
+                                <stop offset="66%" stop-color="#fde047" stop-opacity="1" />
+                                <stop offset="72%" stop-color="#fde047" stop-opacity="1" />
+                                <stop offset="73%" stop-color="#fb923c" stop-opacity="0.6" />
+                                <stop offset="84%" stop-color="#fb923c" stop-opacity="0.2" />
+                                <stop offset="92%" stop-color="#fb923c" stop-opacity="0" />
                                 <stop offset="100%" stop-color="#fb923c" stop-opacity="0" />
                             </linearGradient>
                             <filter id="seamBlur">
-                                <feGaussianBlur stdDeviation="10" />
+                                <feGaussianBlur stdDeviation="14" />
                             </filter>
                         </defs>
                         <rect x="0" y="0" width="64" height="100" fill="url(#seamGrad)" filter="url(#seamBlur)" rx="8" />

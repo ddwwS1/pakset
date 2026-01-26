@@ -24,7 +24,22 @@ body {
 
 /* Header */
 .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
     margin-bottom: 24px;
+}
+
+.header-logo {
+    width: 135px;
+    height: 125px;
+    object-fit: contain;
+}
+
+.header-text {
+    display: flex;
+    flex-direction: column;
+    padding-left: 6px;
 }
 
 .header h1 {
@@ -54,9 +69,21 @@ body {
     margin-bottom: 12px;
 }
 
+.shift-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
 .shift-label {
     font-size: 14px;
     color: #718096;
+    font-weight: 500;
+}
+
+.shift-next {
+    font-size: 12px;
+    color: #94a3b8;
     font-weight: 500;
 }
 
@@ -119,6 +146,26 @@ body {
     opacity: 0.98;
     transition: left 0.25s ease, width 0.25s ease, opacity 0.2s ease;
 }
+
+.progress-pulse {
+    position: absolute;
+    top: 0;
+    left: -40%;
+    height: 100%;
+    width: 40%;
+    z-index: 20;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
+    animation: progressPulse 10s linear infinite;
+    mix-blend-mode: screen;
+}
+
+
+@keyframes progressPulse {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
+}
+
 
 /* Control Panel */
 .control-panel {

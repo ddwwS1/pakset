@@ -76,6 +76,7 @@ function updateShiftProgress() {
     const fillEl = document.getElementById('progressFill');
     const otAreaEl = document.getElementById('progressOvertimeArea');
     const otFillEl = document.getElementById('progressOvertimeFill');
+    const nextShiftEl = document.getElementById('nextShiftIn');
 
     if (!state.currentShiftName || !state.shiftTotalMs || !state.shiftStartTime) {
         document.getElementById('shiftName').textContent = 'No active shift';
@@ -83,6 +84,7 @@ function updateShiftProgress() {
         if (otAreaEl) { otAreaEl.style.width = '0%'; otAreaEl.style.left = '0%'; otAreaEl.style.display = 'none'; }
         if (otFillEl) { otFillEl.style.width = '0%'; otFillEl.style.left = '0%'; otFillEl.style.display = 'none'; }
         document.getElementById('shiftTime').textContent = 'Start: —  End: —';
+        if (nextShiftEl) nextShiftEl.textContent = 'Next shift in: —';
         return;
     }
 
@@ -132,7 +134,7 @@ function updateShiftProgress() {
     // Seam blending element — center it on the boundary and use transform for crisp placement
     const seamEl = document.getElementById('progressSeamSvg');
     if (seamEl) {
-        const seamWidthPx = 160; // visual fade width in px (tighter, cleaner blend)
+        const seamWidthPx = 320;
         if (overtimeMs > 0 && regularAreaPct > 0 && overtimeAreaPct > 0) {
             seamEl.style.display = 'block';
             seamEl.style.width = seamWidthPx + 'px';
@@ -172,6 +174,16 @@ function updateShiftProgress() {
         shiftTimeText += `  Overtime: ${otLabel}`;
     }
     document.getElementById('shiftTime').textContent = shiftTimeText;
+
+    if (nextShiftEl) {
+        const endTime = state.shiftEndTime || (state.shiftStartTime + state.shiftTotalMs);
+        const remainingMs = Math.max(0, endTime - now);
+        const remH = Math.floor(remainingMs / (60 * 60 * 1000));
+        const remM = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+        const remS = Math.floor((remainingMs % (60 * 1000)) / 1000);
+        const fmt = (n) => n.toString().padStart(2, '0');
+        nextShiftEl.textContent = `Next shift in: ${fmt(remH)}:${fmt(remM)}:${fmt(remS)}`;
+    }
 
         // no shiftStats element per user request
 
@@ -1485,16 +1497,21 @@ function setupEventListeners() {
     const schedulePanel = document.getElementById('schedulePanel');
     const scheduleIcon = document.getElementById('scheduleIcon');
     if (scheduleToggleBtn && schedulePanel) {
+        if (scheduleLoadBtn) {
+            scheduleLoadBtn.style.display = (schedulePanel.style.display !== 'none') ? 'inline-flex' : 'none';
+        }
         scheduleToggleBtn.addEventListener('click', () => {
             const open = schedulePanel.style.display !== 'none';
             if (open) {
                 schedulePanel.style.display = 'none';
                 scheduleToggleBtn.setAttribute('aria-expanded', 'false');
                 if (scheduleIcon) scheduleIcon.querySelectorAll('*').forEach(el=>el.setAttribute('stroke','#3b82f6'));
+                if (scheduleLoadBtn) scheduleLoadBtn.style.display = 'none';
             } else {
                 schedulePanel.style.display = 'block';
                 scheduleToggleBtn.setAttribute('aria-expanded', 'true');
                 if (scheduleIcon) scheduleIcon.querySelectorAll('*').forEach(el=>el.setAttribute('stroke','#fb923c'));
+                if (scheduleLoadBtn) scheduleLoadBtn.style.display = 'inline-flex';
             }
         });
     }
