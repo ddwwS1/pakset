@@ -156,9 +156,9 @@ body {
 
 .stat-card {
     background: #e0e5ec;
-    border-radius: 20px;
-    padding: 20px;
-    box-shadow: 6px 6px 12px #a3b1c6, -6px -6px 12px #ffffff;
+    border-radius: 22px;
+    padding: 26px;
+    box-shadow: 8px 8px 16px #a3b1c6, -8px -8px 16px #ffffff;
     transition: all 0.3s ease;
 }
 
@@ -177,8 +177,8 @@ body {
 }
 
 .stat-icon {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -199,14 +199,14 @@ body {
 }
 
 .stat-label {
-    font-size: 14px;
+    font-size: 15px;
     color: #718096;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 
 .stat-value {
-    font-size: 20px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 700;
     color: #2d3748;
 }
 
@@ -221,14 +221,14 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
     background: none;
     border: none;
     color: #4299e1;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
-    padding: 16px;
+    padding: 18px;
 }
 
 .add-machine-form {
@@ -401,8 +401,28 @@ body {
 }
 
 .machine-status-icon {
-    width: 20px;
-    height: 20px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 2px 2px 6px rgba(0,0,0,0.12);
+}
+
+.machine-brand-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    display: block;
+    border-radius: 6px;
+}
+
+.machine-content { 
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .machine-name {

@@ -223,9 +223,9 @@ async function loadCurrentShiftFromFirestore() {
     if (active) {
         state.shiftStartTime = active.start.getTime();
         state.shiftEndTime = active.end.getTime();
-        // regular and overtime (hours) come from raw
-        const regularHours = (active.raw && typeof active.raw.duration === 'number') ? active.raw.duration : Math.round((active.end.getTime() - active.start.getTime()) / (1000*60*60));
-        const overtimeHours = (active.raw && typeof active.raw.overtime === 'number') ? active.raw.overtime : 0;
+        // regular and overtime (hours) come from raw (coerce strings to numbers)
+        const regularHours = (active.raw && !isNaN(Number(active.raw.duration))) ? Number(active.raw.duration) : Math.round((active.end.getTime() - active.start.getTime()) / (1000*60*60));
+        const overtimeHours = (active.raw && !isNaN(Number(active.raw.overtime))) ? Number(active.raw.overtime) : 0;
         state.shiftRegularMs = regularHours * 60 * 60 * 1000;
         state.shiftOvertimeMs = overtimeHours * 60 * 60 * 1000;
         state.shiftTotalMs = state.shiftRegularMs + state.shiftOvertimeMs;
@@ -255,6 +255,13 @@ async function loadCurrentShiftFromFirestore() {
         if (closeBtn) {
             closeBtn.onclick = () => { debugEl.style.display = 'none'; };
         }
+    }
+
+    // Diagnostic log: always print fetched docs and selected shift to console
+    try {
+        console.log('Schedule fetch result:', { fetched: state.lastFetchedDocs, errors: state.fetchErrors, active: (instances.find(inst => now.getTime() >= inst.start.getTime() && now.getTime() <= inst.end.getTime()) || null) });
+    } catch (e) {
+        console.error('Error logging schedule debug', e);
     }
 
     updateShiftProgress();
@@ -323,11 +330,19 @@ function createMachineMarker(machine) {
     const info = document.createElement('div');
     info.className = 'machine-info';
     
-    // Status icon
+    // Status icon or brand icon
     const icon = document.createElement('div');
     icon.className = 'machine-status-icon';
-    icon.innerHTML = getStatusIcon(machine.status);
-    icon.style.color = getStatusColor(machine.status);
+    if (machine.icon) {
+        const img = document.createElement('img');
+        img.className = 'machine-brand-icon';
+        img.src = machine.icon;
+        img.alt = machine.brand || machine.type || 'machine';
+        icon.appendChild(img);
+    } else {
+        icon.innerHTML = getStatusIcon(machine.status);
+        icon.style.color = getStatusColor(machine.status);
+    }
     
     // Machine name
     const name = document.createElement('div');
@@ -1151,8 +1166,26 @@ function setupEventListeners() {
     const addMachineBtn = document.getElementById('addMachineBtn');
     const addMachineForm = document.getElementById('addMachineForm');
     const addMachineCard = document.getElementById('addMachineCard');
-    const machineTypeSelect = document.getElementById('machineType');
-    const customMachineTypeInput = document.getElementById('customMachineType');
+    const machineBrandSelect = document.getElementById('machineBrand');
+    const machineModelSelect = document.getElementById('machineModel');
+
+    // brands -> models mapping
+    const brandModels = {
+        jsw: ['JSW-1'],
+        bmb: ['BMB-H1']
+    };
+
+    // populate model select based on brand
+    function populateModelsForBrand(brand) {
+        const models = brandModels[brand] || [];
+        machineModelSelect.innerHTML = '';
+        models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            machineModelSelect.appendChild(opt);
+        });
+    }
     
     addMachineBtn.addEventListener('click', () => {
         addMachineBtn.style.display = 'none';
@@ -1160,36 +1193,30 @@ function setupEventListeners() {
         addMachineCard.classList.add('pressed');
     });
     
-    machineTypeSelect.addEventListener('change', () => {
-        if (machineTypeSelect.value === 'Custom Machine') {
-            customMachineTypeInput.style.display = 'block';
-        } else {
-            customMachineTypeInput.style.display = 'none';
-        }
+    machineBrandSelect.addEventListener('change', () => {
+        populateModelsForBrand(machineBrandSelect.value);
     });
+    // initial populate
+    populateModelsForBrand(machineBrandSelect.value);
     
     document.getElementById('addMachineConfirm').addEventListener('click', () => {
         const name = document.getElementById('machineName').value.trim();
-        let type = machineTypeSelect.value;
+        const brand = machineBrandSelect.value;
+        let type = machineModelSelect.value;
         
         if (!name) {
             alert('Please enter a machine name');
             return;
         }
         
-        if (type === 'Custom Machine') {
-            const customType = customMachineTypeInput.value.trim();
-            if (!customType) {
-                alert('Please enter a custom machine type');
-                return;
-            }
-            type = customType;
-        }
-        
+        const iconPath = `assets/icons/machine-icons/${brand}-icon-e.png`;
+
         const newMachine = {
             id: generateId(),
             name: name,
             type: type,
+            brand: brand,
+            icon: iconPath,
             status: 'idle',
             position: { x: 50, y: 50 },
             workers: [],
@@ -1201,9 +1228,10 @@ function setupEventListeners() {
         state.machines.push(newMachine);
         
         document.getElementById('machineName').value = '';
-        machineTypeSelect.value = 'Injection Molding - Vertical';
-        customMachineTypeInput.value = '';
-        customMachineTypeInput.style.display = 'none';
+        // reset brand/model selects to defaults
+        machineBrandSelect.value = Object.keys(brandModels)[0] || 'jsw';
+        populateModelsForBrand(machineBrandSelect.value);
+        machineModelSelect.selectedIndex = 0;
         addMachineBtn.style.display = 'flex';
         addMachineForm.style.display = 'none';
         addMachineCard.classList.remove('pressed');
@@ -1215,9 +1243,9 @@ function setupEventListeners() {
     
     document.getElementById('addMachineCancel').addEventListener('click', () => {
         document.getElementById('machineName').value = '';
-        machineTypeSelect.value = 'Injection Molding - Vertical';
-        customMachineTypeInput.value = '';
-        customMachineTypeInput.style.display = 'none';
+        machineBrandSelect.value = Object.keys(brandModels)[0] || 'jsw';
+        populateModelsForBrand(machineBrandSelect.value);
+        machineModelSelect.selectedIndex = 0;
         addMachineBtn.style.display = 'flex';
         addMachineForm.style.display = 'none';
         addMachineCard.classList.remove('pressed');

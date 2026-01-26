@@ -132,16 +132,13 @@
                     </button>
                     <div class="add-machine-form" id="addMachineForm" style="display: none;">
                         <input type="text" id="machineName" placeholder="Machine name" class="form-input">
-                        <select id="machineType" class="form-input">
-                            <option value="Injection Molding - Vertical">Injection Molding - Vertical</option>
-                            <option value="Injection Molding - Horizontal">Injection Molding - Horizontal</option>
-                            <option value="Injection Molding - Rotary">Injection Molding - Rotary</option>
-                            <option value="Injection Molding - Multi-Component">Injection Molding - Multi-Component</option>
-                            <option value="Insert Molding Machine">Insert Molding Machine</option>
-                            <option value="Blow Molding Machine">Blow Molding Machine</option>
-                            <option value="Custom Machine">Custom Machine</option>
+                        <select id="machineBrand" class="form-input">
+                            <option value="jsw">jsw (1)</option>
+                            <option value="bmb">bmb hybrid</option>
                         </select>
-                        <input type="text" id="customMachineType" placeholder="Enter custom type" class="form-input" style="display: none;">
+                        <select id="machineModel" class="form-input">
+                            <!-- populated by JS based on brand -->
+                        </select>
                         <div class="form-buttons">
                             <button class="form-btn form-btn-primary" id="addMachineConfirm">Add</button>
                             <button class="form-btn form-btn-secondary" id="addMachineCancel">Cancel</button>
