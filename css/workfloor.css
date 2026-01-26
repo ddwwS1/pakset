@@ -76,74 +76,48 @@ body {
 }
 
 .progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
     height: 100%;
+    z-index: 6;
     background: linear-gradient(90deg, #4299e1, #3b82f6);
     border-radius: 12px;
-    transition: width 0.3s ease;
+    transition: width 0.3s ease, left 0.3s ease;
     box-shadow: 2px 2px 4px rgba(66, 153, 225, 0.3);
-}
-
-.progress-overtime {
-    position: absolute;
-    height: 100%;
-    background: linear-gradient(90deg, #fb923c, #f97316);
-    border-radius: 12px;
-    transition: left 0.3s ease, width 0.3s ease;
-    box-shadow: 2px 2px 4px rgba(249, 115, 22, 0.25);
-}
-
-.debug-panel {
-    background: #fff6ea;
-    border-radius: 8px;
-    padding: 12px;
-    margin-top: 12px;
-    border: 1px solid #fcd34d;
-    color: #92400e;
-    font-size: 13px;
-}
-
-.shift-range {
-    font-size: 12px;
-    color: #4a5568;
-}
-
-.shift-name-small {
-    font-size: 12px;
-    color: #4a5568;
-    font-weight: 600;
-}
-
-.shift-stats {
-    font-size: 12px;
-    color: #2d3748;
 }
 
 .progress-overtime-area {
     position: absolute;
+    top: 0;
     height: 100%;
-    left: 0;
-    width: 0;
-    background: rgba(249,115,22,0.12);
-    border-radius: 12px;
+    display: none;
+    z-index: 8;
+    border-radius: 0 12px 12px 0;
 }
 
 .progress-overtime-fill {
     position: absolute;
+    top: 0;
     height: 100%;
-    left: 0;
-    width: 0;
-    background: linear-gradient(90deg, rgba(251,146,60,0.9), rgba(249,115,22,0.9));
-    border-radius: 12px;
-    transition: left 0.3s ease, width 0.3s ease;
+    display: none;
+    z-index: 12;
+    transition: width 0.3s ease;
+    border-radius: 0 12px 12px 0;
+    box-shadow: 2px 2px 4px rgba(249, 115, 22, 0.25);
 }
 
-.debug-close {
-    float: right;
-    border: none;
-    background: transparent;
-    color: #92400e;
-    font-weight: 700;
-    cursor: pointer;
+.progress-seam-svg {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 160px;
+    pointer-events: none;
+    z-index: 60;
+    display: none;
+    mix-blend-mode: screen;
+    opacity: 0.98;
+    transition: left 0.25s ease, width 0.25s ease, opacity 0.2s ease;
 }
 
 /* Control Panel */
@@ -156,9 +130,9 @@ body {
 
 .stat-card {
     background: #e0e5ec;
-    border-radius: 22px;
-    padding: 26px;
-    box-shadow: 8px 8px 16px #a3b1c6, -8px -8px 16px #ffffff;
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 6px 6px 12px #a3b1c6, -6px -6px 12px #ffffff;
     transition: all 0.3s ease;
 }
 
@@ -177,8 +151,8 @@ body {
 }
 
 .stat-icon {
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -199,14 +173,14 @@ body {
 }
 
 .stat-label {
-    font-size: 15px;
+    font-size: 14px;
     color: #718096;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .stat-value {
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 20px;
+    font-weight: 600;
     color: #2d3748;
 }
 
@@ -221,14 +195,14 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     background: none;
     border: none;
     color: #4299e1;
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 500;
     cursor: pointer;
-    padding: 18px;
+    padding: 16px;
 }
 
 .add-machine-form {
@@ -282,7 +256,7 @@ body {
 /* Main Grid */
 .main-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-columns: 4fr 2fr 2fr;
     gap: 24px;
 }
 
@@ -336,7 +310,8 @@ body {
 .factory-floor-map {
     position: relative;
     width: 100%;
-    aspect-ratio: 4/3;
+    height: 450px;
+    aspect-ratio: 1/4;
     background: #e0e5ec;
     border-radius: 16px;
     border: 4px dashed #a3b1c6;
@@ -401,28 +376,8 @@ body {
 }
 
 .machine-status-icon {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    background: #ffffff;
-    box-shadow: 2px 2px 6px rgba(0,0,0,0.12);
-}
-
-.machine-brand-icon {
-    width: 40px;
-    height: 40px;
-    object-fit: contain;
-    display: block;
-    border-radius: 6px;
-}
-
-.machine-content { 
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    width: 20px;
+    height: 20px;
 }
 
 .machine-name {
@@ -973,4 +928,41 @@ body {
 
 .modal-btn-secondary {
     color: #718096;
+}
+
+/* Schedule Table */
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+.schedule-table th, .schedule-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    text-align: left;
+    vertical-align: top;
+}
+.schedule-table thead th {
+    color: #4a5568;
+    font-weight: 600;
+    font-size: 13px;
+}
+.shift-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 0;
+}
+.shift-name {
+    font-weight: 600;
+    color: #2d3748;
+    margin-right: 6px;
+}
+.shift-time-inline {
+    color: #4a5568;
+    font-size: 13px;
+}
+.shift-row.overtime .shift-name, .shift-row.overtime .shift-time-inline {
+    color: #c2410c;
+    font-weight: 700;
 }
