@@ -62,6 +62,19 @@ body {
     box-shadow: 9px 9px 16px #a3b1c6, -9px -9px 16px #ffffff;
 }
 
+@media (max-width: 768px) {
+    .app {
+        padding: 12px;
+    }
+
+    .shift-progress-container {
+        position: sticky;
+        top: calc(env(safe-area-inset-top, 0px) + 8px);
+        z-index: 2000;
+        margin-bottom: 16px;
+    }
+}
+
 .shift-info {
     display: flex;
     justify-content: space-between;
