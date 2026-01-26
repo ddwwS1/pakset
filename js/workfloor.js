@@ -1,4 +1,4 @@
-import { db, doc, getDoc } from './firabase.js';
+import { db, doc, getDoc, fetchSchedulesByDateRange } from './firabase.js';
 
 // ============================================================================
 // STATE MANAGEMENT
@@ -94,18 +94,56 @@ function updateShiftProgress() {
     const normalElapsed = Math.max(0, Math.min(elapsed, regularMs));
     const overtimeElapsed = Math.max(0, Math.min(elapsed - regularMs, overtimeMs));
 
-    const normalPctFilled = (normalElapsed / totalMs) * 100;
+    const regularAreaPct = (regularMs / totalMs) * 100;
     const overtimeAreaPct = (overtimeMs / totalMs) * 100; // static area representing OT region
-    const overtimePctFilled = (overtimeElapsed / totalMs) * 100;
 
-    if (fillEl) fillEl.style.width = normalPctFilled + '%';
+    // Fill percentages relative to their areas
+    const regularFillPctWithin = regularMs > 0 ? (normalElapsed / regularMs) * 100 : 0;
+    const overtimeFillPctWithin = overtimeMs > 0 ? (overtimeElapsed / overtimeMs) * 100 : 0;
+
+    // Convert fills to total-bar percentages so they don't overlap
+    const regularFillPctOfTotal = (regularFillPctWithin / 100) * regularAreaPct; // equals (normalElapsed/totalMs)*100
+    const overtimeFillPctOfTotal = (overtimeFillPctWithin / 100) * overtimeAreaPct; // equals (overtimeElapsed/totalMs)*100
+
+    if (fillEl) {
+        fillEl.style.left = '0%';
+        fillEl.style.width = regularFillPctOfTotal + '%';
+        fillEl.style.background = 'linear-gradient(90deg, #4299e1, #3b82f6)';
+        fillEl.style.borderRadius = (regularAreaPct < 99.999 ? '12px 0 0 12px' : '12px');
+        fillEl.style.zIndex = '6';
+    }
     if (otAreaEl) {
-        otAreaEl.style.left = ((regularMs / totalMs) * 100) + '%';
+        otAreaEl.style.left = (regularAreaPct) + '%';
         otAreaEl.style.width = overtimeAreaPct + '%';
+        otAreaEl.style.display = overtimeMs > 0 ? 'block' : 'none';
+        // make area transparent so it doesn't create a visible rectangle at the boundary
+        otAreaEl.style.background = 'transparent';
+        otAreaEl.style.zIndex = '8';
     }
     if (otFillEl) {
-        otFillEl.style.left = ((regularMs / totalMs) * 100) + '%';
-        otFillEl.style.width = overtimePctFilled + '%';
+        otFillEl.style.left = (regularAreaPct) + '%';
+        otFillEl.style.width = overtimeFillPctOfTotal + '%';
+        otFillEl.style.display = overtimeMs > 0 ? 'block' : 'none';
+        otFillEl.style.background = 'linear-gradient(90deg, #fb923c, #f97316)';
+        otFillEl.style.borderRadius = (regularAreaPct > 0 ? '0 12px 12px 0' : '12px');
+        otFillEl.style.zIndex = '12';
+    }
+
+    // Seam blending element — center it on the boundary and use transform for crisp placement
+    const seamEl = document.getElementById('progressSeamSvg');
+    if (seamEl) {
+        const seamWidthPx = 160; // visual fade width in px (tighter, cleaner blend)
+        if (overtimeMs > 0 && regularAreaPct > 0 && overtimeAreaPct > 0) {
+            seamEl.style.display = 'block';
+            seamEl.style.width = seamWidthPx + 'px';
+            seamEl.style.left = `${regularAreaPct}%`;
+            seamEl.style.transform = 'translateX(-50%)';
+            seamEl.style.opacity = '1';
+            seamEl.style.zIndex = '50';
+        } else {
+            seamEl.style.display = 'none';
+            seamEl.style.transform = '';
+        }
     }
 
     // Display time: elapsed vs regular + overtime
@@ -131,23 +169,13 @@ function updateShiftProgress() {
         let otLabel = '';
         if (otMinutes === 0) otLabel = `${otHours}h`;
         else otLabel = `${otHours}h ${otMinutes}m`;
-        shiftTimeText += `  +OT: ${otLabel}`;
+        shiftTimeText += `  Overtime: ${otLabel}`;
     }
     document.getElementById('shiftTime').textContent = shiftTimeText;
 
         // no shiftStats element per user request
 
-    // Toggle overtime UI + colors
-    if (overtimeMs > 0) {
-        if (otAreaEl) otAreaEl.style.display = 'block';
-        if (otFillEl) otFillEl.style.display = 'block';
-        // primary fill becomes orange when overtime exists
-        if (fillEl) fillEl.style.background = 'linear-gradient(90deg, #fb923c, #f97316)';
-    } else {
-        if (otAreaEl) otAreaEl.style.display = 'none';
-        if (otFillEl) otFillEl.style.display = 'none';
-        if (fillEl) fillEl.style.background = 'linear-gradient(90deg, #4299e1, #3b82f6)';
-    }
+    // Keep regular fill blue and overtime fill orange; visibility already set above
 
     document.getElementById('shiftName').textContent = state.currentShiftName || 'Current Shift';
 }
@@ -187,18 +215,148 @@ function buildShiftInstances(scheduleDocs) {
     const instances = [];
     for (const s of scheduleDocs) {
         const base = s.date; // YYYY-MM-DD
-        const shifts = s.data.shifts || [];
+        const shifts = (s.data && s.data.shifts) || [];
         shifts.forEach(sh => {
-            const start = parseTimeForDate(base, sh.start);
-            let end = parseTimeForDate(base, sh.end);
-            if (end <= start) {
-                // overnight -> next day
-                end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+            // shifts may store start/end as minutes since midnight (number) or as 'HH:MM' strings
+            let startDateObj, endDateObj;
+
+            if (typeof sh.start === 'number') {
+                // minutes since midnight
+                const [y, m, d] = base.split('-').map(n => parseInt(n, 10));
+                startDateObj = new Date(y, m - 1, d, 0, 0, 0, 0);
+                startDateObj = new Date(startDateObj.getTime() + sh.start * 60 * 1000);
+            } else {
+                startDateObj = parseTimeForDate(base, String(sh.start || '00:00'));
             }
-            instances.push({ name: sh.shift, start, end, raw: sh });
+
+            if (typeof sh.end === 'number') {
+                const [y, m, d] = base.split('-').map(n => parseInt(n, 10));
+                endDateObj = new Date(y, m - 1, d, 0, 0, 0, 0);
+                endDateObj = new Date(endDateObj.getTime() + sh.end * 60 * 1000);
+            } else {
+                endDateObj = parseTimeForDate(base, String(sh.end || '00:00'));
+            }
+
+            if (endDateObj <= startDateObj) {
+                // overnight -> next day
+                endDateObj = new Date(endDateObj.getTime() + 24 * 60 * 60 * 1000);
+            }
+
+            instances.push({ name: sh.shift || sh.shiftName || 'Shift', start: startDateObj, end: endDateObj, raw: sh, date: base });
         });
     }
     return instances;
+}
+
+function minutesToHHMM(mins) {
+    const total = Number(mins) || 0;
+    const mm = total % 60;
+    const hh = Math.floor(total / 60) % 24;
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${pad(hh)}:${pad(mm)}`;
+}
+
+function formatShiftForDisplay(baseDateStr, sh) {
+    // sh may have numeric minutes or string times
+    let startText = '';
+    let endText = '';
+    if (typeof sh.start === 'number') {
+        startText = minutesToHHMM(sh.start);
+    } else {
+        startText = String(sh.start || '00:00');
+    }
+    if (typeof sh.end === 'number') {
+        endText = minutesToHHMM(sh.end);
+    } else {
+        endText = String(sh.end || '00:00');
+    }
+    // handle overnight display if end <= start when numeric
+    if (typeof sh.start === 'number' && typeof sh.end === 'number' && sh.end <= sh.start) {
+        endText += ' (+1d)';
+    }
+    return `${startText} — ${endText}`;
+}
+
+async function fetchSchedulesRangeAndRender(startDate, endDate) {
+    try {
+        const docs = await fetchSchedulesByDateRange(startDate, endDate);
+        state.lastFetchedDocs = docs;
+        renderScheduleTable(docs);
+        return docs;
+    } catch (err) {
+        console.error('Error loading schedules for range', err);
+        state.fetchErrors = state.fetchErrors || [];
+        state.fetchErrors.push({ range: [startDate, endDate], message: err.message });
+        renderScheduleTable([]);
+        throw err;
+    }
+}
+
+function renderScheduleTable(docs) {
+    const container = document.getElementById('scheduleContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const table = document.createElement('table');
+    table.className = 'schedule-table';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Date</th><th>Weekday</th><th>Shifts</th></tr>';
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+
+    if (!docs || docs.length === 0) {
+        const r = document.createElement('tr');
+        r.innerHTML = '<td colspan="3" style="text-align:center;color:#718096;padding:12px;">No schedules found for range.</td>';
+        tbody.appendChild(r);
+    } else {
+        docs.forEach(d => {
+            const row = document.createElement('tr');
+            const dateCell = document.createElement('td');
+            dateCell.textContent = d.data.date || d.id;
+
+            const weekdayCell = document.createElement('td');
+            const weekday = d.data.weekday || new Date((d.data && d.data.date) ? d.data.date + 'T00:00:00' : d.id).toLocaleDateString('en-US', { weekday: 'long' });
+            const trWeekday = d.data.weekdayTurkish || (d.data.shifts && d.data.shifts[0] && d.data.shifts[0].weekdayTurkish) || '';
+            weekdayCell.textContent = weekday + (trWeekday ? (' / ' + trWeekday) : '');
+
+            const shiftsCell = document.createElement('td');
+            if (Array.isArray(d.data.shifts) && d.data.shifts.length > 0) {
+                d.data.shifts.forEach((sh, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'shift-row';
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'shift-name';
+                    nameSpan.textContent = sh.shift || sh.shiftName || ('Shift ' + (i+1));
+
+                    const timeSpan = document.createElement('span');
+                    timeSpan.className = 'shift-time-inline';
+                    timeSpan.textContent = formatShiftForDisplay(d.data.date, sh);
+
+                    div.appendChild(nameSpan);
+                    div.appendChild(document.createTextNode(' '));
+                    div.appendChild(timeSpan);
+
+                    if (sh.overtime && Number(sh.overtime) > 0) {
+                        div.classList.add('overtime');
+                    }
+
+                    shiftsCell.appendChild(div);
+                });
+            } else {
+                shiftsCell.textContent = '—';
+            }
+
+            row.appendChild(dateCell);
+            row.appendChild(weekdayCell);
+            row.appendChild(shiftsCell);
+            tbody.appendChild(row);
+        });
+    }
+
+    table.appendChild(tbody);
+    container.appendChild(table);
 }
 
 async function loadCurrentShiftFromFirestore() {
@@ -1318,6 +1476,47 @@ function setupEventListeners() {
             closeMachineMenu();
         }
     });
+
+    // Schedule loader controls (date range)
+    const scheduleLoadBtn = document.getElementById('loadScheduleBtn');
+    const scheduleStart = document.getElementById('scheduleStart');
+    const scheduleEnd = document.getElementById('scheduleEnd');
+    const scheduleToggleBtn = document.getElementById('scheduleToggleBtn');
+    const schedulePanel = document.getElementById('schedulePanel');
+    const scheduleIcon = document.getElementById('scheduleIcon');
+    if (scheduleToggleBtn && schedulePanel) {
+        scheduleToggleBtn.addEventListener('click', () => {
+            const open = schedulePanel.style.display !== 'none';
+            if (open) {
+                schedulePanel.style.display = 'none';
+                scheduleToggleBtn.setAttribute('aria-expanded', 'false');
+                if (scheduleIcon) scheduleIcon.querySelectorAll('*').forEach(el=>el.setAttribute('stroke','#3b82f6'));
+            } else {
+                schedulePanel.style.display = 'block';
+                scheduleToggleBtn.setAttribute('aria-expanded', 'true');
+                if (scheduleIcon) scheduleIcon.querySelectorAll('*').forEach(el=>el.setAttribute('stroke','#fb923c'));
+            }
+        });
+    }
+    if (scheduleLoadBtn && scheduleStart && scheduleEnd) {
+        scheduleLoadBtn.addEventListener('click', async () => {
+            const s = scheduleStart.value;
+            const e = scheduleEnd.value;
+            if (!s || !e) {
+                alert('Please select both start and end dates');
+                return;
+            }
+            scheduleLoadBtn.disabled = true;
+            try {
+                await fetchSchedulesRangeAndRender(s, e);
+            } catch (err) {
+                console.error('Failed to load schedules', err);
+                alert('Failed to load schedules: ' + (err.message || err));
+            } finally {
+                scheduleLoadBtn.disabled = false;
+            }
+        });
+    }
 }
 
 // ============================================================================
@@ -1340,6 +1539,21 @@ function init() {
         console.error('Error loading shift from Firestore', err);
     }
     setupEventListeners();
+    // Initialize schedule inputs to a 7-day range and load
+    try {
+        const startEl = document.getElementById('scheduleStart');
+        const endEl = document.getElementById('scheduleEnd');
+        if (startEl && endEl) {
+            const today = new Date();
+            const toISODate = d => d.toISOString().split('T')[0];
+            startEl.value = toISODate(today);
+            const endDate = new Date(today.getTime() + 6 * 24 * 60 * 60 * 1000);
+            endEl.value = toISODate(endDate);
+            fetchSchedulesRangeAndRender(startEl.value, endEl.value).catch(() => {});
+        }
+    } catch (e) {
+        console.error('Error initializing schedule range', e);
+    }
     
     // Update shift progress every minute
     setInterval(updateShiftProgress, 60000);

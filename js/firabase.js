@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-storage.js";
 import { getFunctions } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-functions.js";
@@ -26,4 +26,19 @@ const analytics = getAnalytics(app);
 
 const db = getFirestore(app);
 
-export { db, getAuth, getStorage, getFunctions, doc, getDoc };
+async function fetchSchedulesByDateRange(startDate, endDate) {
+  // startDate, endDate: 'YYYY-MM-DD' strings (inclusive)
+  try {
+    const colRef = collection(db, 'schedules');
+    const q = query(colRef, where('date', '>=', startDate), where('date', '<=', endDate), orderBy('date'));
+    const snap = await getDocs(q);
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, data: d.data() }));
+    return out;
+  } catch (err) {
+    console.error('fetchSchedulesByDateRange error', err);
+    throw err;
+  }
+}
+
+export { db, getAuth, getStorage, getFunctions, doc, getDoc, collection, query, where, orderBy, getDocs, fetchSchedulesByDateRange };
