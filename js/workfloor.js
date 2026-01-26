@@ -4,81 +4,13 @@
 
 let state = {
     machines: [
-        {
-            id: '1',
-            name: 'IM-V-01',
-            type: 'Injection Molding - Vertical',
-            status: 'running',
-            position: { x: 20, y: 20 },
-            workers: ['worker-1'],
-            efficiency: 87,
-            lastMaintenance: '2026-01-20',
-            todos: [
-                { id: 't1', text: 'Check hydraulic pressure', completed: false },
-                { id: 't2', text: 'Clean mold cavity', completed: true }
-            ]
-        },
-        {
-            id: '2',
-            name: 'IM-H-02',
-            type: 'Injection Molding - Horizontal',
-            status: 'idle',
-            position: { x: 45, y: 30 },
-            workers: [],
-            efficiency: 0,
-            lastMaintenance: '2026-01-18',
-            todos: []
-        },
-        {
-            id: '3',
-            name: 'IM-R-03',
-            type: 'Injection Molding - Rotary',
-            status: 'maintenance',
-            position: { x: 70, y: 45 },
-            workers: ['worker-2'],
-            efficiency: 0,
-            lastMaintenance: '2026-01-25',
-            todos: [
-                { id: 't3', text: 'Replace worn parts', completed: false },
-                { id: 't4', text: 'Lubricate moving components', completed: false }
-            ]
-        },
-        {
-            id: '4',
-            name: 'IM-MC-04',
-            type: 'Injection Molding - Multi-Component',
-            status: 'running',
-            position: { x: 30, y: 65 },
-            workers: ['worker-3'],
-            efficiency: 92,
-            lastMaintenance: '2026-01-22',
-            todos: []
-        },
-        {
-            id: '5',
-            name: 'INS-01',
-            type: 'Insert Molding Machine',
-            status: 'running',
-            position: { x: 60, y: 75 },
-            workers: ['worker-4'],
-            efficiency: 78,
-            lastMaintenance: '2026-01-19',
-            todos: [
-                { id: 't5', text: 'Inspect insert placement', completed: false }
-            ]
-        }
+
     ],
     workers: [
-        { id: 'worker-1', name: 'John Smith', role: 'Operator', assignedMachine: '1' },
-        { id: 'worker-2', name: 'Maria Garcia', role: 'Technician', assignedMachine: '3' },
-        { id: 'worker-3', name: 'Robert Chen', role: 'Chief Operator', assignedMachine: '4' },
-        { id: 'worker-4', name: 'Sarah Johnson', role: 'Electrician', assignedMachine: '5' },
-        { id: 'worker-5', name: 'Ahmed Hassan', role: 'Maintenance', assignedMachine: null },
-        { id: 'worker-6', name: 'Lisa Anderson', role: 'Quality Inspector', assignedMachine: null }
+
     ],
     tags: [
-        { id: 'tag-1', position: { x: 10, y: 10 }, text: 'Production Area' },
-        { id: 'tag-2', position: { x: 85, y: 15 }, text: 'Storage' }
+
     ],
     isEditMode: false,
     isAddingTag: false,
@@ -88,15 +20,10 @@ let state = {
 
 // Room layout matching the floor plan image
 const rooms = [
-    { x: 4, y: 6, width: 14, height: 30 }, // Left top room
-    { x: 4, y: 38, width: 20, height: 30 }, // Left bottom room
-    { x: 22, y: 38, width: 16, height: 30 }, // Center bottom left room
-    { x: 23, y: 6, width: 31, height: 30 }, // Center large room
-    { x: 56, y: 6, width: 18, height: 18 }, // Right top room
-    { x: 76, y: 6, width: 19, height: 30 }, // Right room
-    { x: 76, y: 38, width: 7, height: 12 }, // Small right room 1
-    { x: 85, y: 38, width: 10, height: 12 }, // Small right room 2
-    { x: 4, y: 70, width: 91, height: 26 } // Bottom large room
+    { x: 5, y: 40, width: 90 , height: 55 }, // main factory area
+    { x: 20, y: 5, width: 35, height: 35 }, // main factory top left room
+    { x: 55, y: 5, width: 40, height: 35 }, // workshop
+    { x: 5, y: 5, width: 15, height: 35 } // ofset room
 ];
 
 // ============================================================================
