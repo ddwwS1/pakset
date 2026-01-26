@@ -83,6 +83,69 @@ body {
     box-shadow: 2px 2px 4px rgba(66, 153, 225, 0.3);
 }
 
+.progress-overtime {
+    position: absolute;
+    height: 100%;
+    background: linear-gradient(90deg, #fb923c, #f97316);
+    border-radius: 12px;
+    transition: left 0.3s ease, width 0.3s ease;
+    box-shadow: 2px 2px 4px rgba(249, 115, 22, 0.25);
+}
+
+.debug-panel {
+    background: #fff6ea;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+    font-size: 13px;
+}
+
+.shift-range {
+    font-size: 12px;
+    color: #4a5568;
+}
+
+.shift-name-small {
+    font-size: 12px;
+    color: #4a5568;
+    font-weight: 600;
+}
+
+.shift-stats {
+    font-size: 12px;
+    color: #2d3748;
+}
+
+.progress-overtime-area {
+    position: absolute;
+    height: 100%;
+    left: 0;
+    width: 0;
+    background: rgba(249,115,22,0.12);
+    border-radius: 12px;
+}
+
+.progress-overtime-fill {
+    position: absolute;
+    height: 100%;
+    left: 0;
+    width: 0;
+    background: linear-gradient(90deg, rgba(251,146,60,0.9), rgba(249,115,22,0.9));
+    border-radius: 12px;
+    transition: left 0.3s ease, width 0.3s ease;
+}
+
+.debug-close {
+    float: right;
+    border: none;
+    background: transparent;
+    color: #92400e;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 /* Control Panel */
 .control-panel {
     display: grid;

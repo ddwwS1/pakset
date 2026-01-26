@@ -15,14 +15,26 @@
                 <p>Monitor and manage machines, workers, and floor operations</p>
             </div>
 
+            <!-- Debug / Schedule Fetch Info -->
+            <div class="debug-panel" id="shiftDebug" style="display:none;">
+                <button class="debug-close" id="shiftDebugClose">✕</button>
+                <strong>Schedule debug:</strong>
+                <pre id="shiftDebugPre" style="white-space:pre-wrap;">(no data)</pre>
+            </div>
+
             <!-- Shift Progress Bar -->
             <div class="shift-progress-container">
                 <div class="shift-info">
                     <span class="shift-label">Current Shift Progress</span>
-                    <span class="shift-time" id="shiftTime">0:00 / 8:00</span>
+                    <div style="text-align:right;">
+                        <div class="shift-name-small" id="shiftName">—</div>
+                        <div class="shift-time" id="shiftTime">Start: —  End: —</div>
+                    </div>
                 </div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
+                    <div class="progress-overtime-area" id="progressOvertimeArea"></div>
+                    <div class="progress-overtime-fill" id="progressOvertimeFill"></div>
                 </div>
             </div>
 
@@ -213,6 +225,6 @@
         </div>
     </div>
 
-    <script src="js/workfloor.js"></script>
+    <script type="module" src="js/workfloor.js"></script>
 </body>
 </html>

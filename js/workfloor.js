@@ -1,3 +1,5 @@
+import { db, doc, getDoc } from './firabase.js';
+
 // ============================================================================
 // STATE MANAGEMENT
 // ============================================================================
@@ -17,6 +19,8 @@ let state = {
     shiftStartTime: new Date().setHours(8, 0, 0, 0),
     shiftDurationHours: 8
 };
+// Current active shift metadata
+state.currentShiftName = null;
 
 // Room layout matching the floor plan image
 const rooms = [
@@ -69,16 +73,209 @@ function updateStats() {
 
 function updateShiftProgress() {
     const now = Date.now();
+    const fillEl = document.getElementById('progressFill');
+    const otAreaEl = document.getElementById('progressOvertimeArea');
+    const otFillEl = document.getElementById('progressOvertimeFill');
+
+    if (!state.currentShiftName || !state.shiftTotalMs || !state.shiftStartTime) {
+        document.getElementById('shiftName').textContent = 'No active shift';
+        if (fillEl) fillEl.style.width = '0%';
+        if (otAreaEl) { otAreaEl.style.width = '0%'; otAreaEl.style.left = '0%'; otAreaEl.style.display = 'none'; }
+        if (otFillEl) { otFillEl.style.width = '0%'; otFillEl.style.left = '0%'; otFillEl.style.display = 'none'; }
+        document.getElementById('shiftTime').textContent = 'Start: —  End: —';
+        return;
+    }
+
     const elapsed = now - state.shiftStartTime;
-    const shiftDurationMs = state.shiftDurationHours * 60 * 60 * 1000;
-    const progress = Math.min((elapsed / shiftDurationMs) * 100, 100);
-    
-    const elapsedHours = Math.floor(elapsed / (60 * 60 * 1000));
-    const elapsedMinutes = Math.floor((elapsed % (60 * 60 * 1000)) / (60 * 1000));
-    
-    document.getElementById('progressFill').style.width = progress + '%';
-    document.getElementById('shiftTime').textContent = 
-        `${elapsedHours}:${elapsedMinutes.toString().padStart(2, '0')} / ${state.shiftDurationHours}:00`;
+    const regularMs = state.shiftRegularMs || 0;
+    const overtimeMs = state.shiftOvertimeMs || 0;
+    const totalMs = Math.max(regularMs + overtimeMs, 1);
+
+    const normalElapsed = Math.max(0, Math.min(elapsed, regularMs));
+    const overtimeElapsed = Math.max(0, Math.min(elapsed - regularMs, overtimeMs));
+
+    const normalPctFilled = (normalElapsed / totalMs) * 100;
+    const overtimeAreaPct = (overtimeMs / totalMs) * 100; // static area representing OT region
+    const overtimePctFilled = (overtimeElapsed / totalMs) * 100;
+
+    if (fillEl) fillEl.style.width = normalPctFilled + '%';
+    if (otAreaEl) {
+        otAreaEl.style.left = ((regularMs / totalMs) * 100) + '%';
+        otAreaEl.style.width = overtimeAreaPct + '%';
+    }
+    if (otFillEl) {
+        otFillEl.style.left = ((regularMs / totalMs) * 100) + '%';
+        otFillEl.style.width = overtimePctFilled + '%';
+    }
+
+    // Display time: elapsed vs regular + overtime
+    const elapsedTotalHours = Math.floor(elapsed / (60 * 60 * 1000));
+    const elapsedTotalMin = Math.floor((elapsed % (60 * 60 * 1000)) / (60 * 1000));
+
+    const regularH = Math.floor(regularMs / (60 * 60 * 1000));
+    const regularM = Math.floor((regularMs % (60 * 60 * 1000)) / (60 * 1000));
+
+    const overtimeH = Math.floor(overtimeMs / (60 * 60 * 1000));
+    const overtimeM = Math.floor((overtimeMs % (60 * 60 * 1000)) / (60 * 1000));
+
+    // Build labeled start/end and stats
+    const s = new Date(state.shiftStartTime);
+    const e = new Date(state.shiftEndTime || (state.shiftStartTime + regularMs));
+    const pad = (n) => n.toString().padStart(2, '0');
+    const fmt = dt => `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    // show start/end and append overtime amount when present
+    let shiftTimeText = `Start: ${fmt(s)}  End: ${fmt(e)}`;
+    if (overtimeMs > 0) {
+        const otHours = Math.floor(overtimeMs / (60 * 60 * 1000));
+        const otMinutes = Math.floor((overtimeMs % (60 * 60 * 1000)) / (60 * 1000));
+        let otLabel = '';
+        if (otMinutes === 0) otLabel = `${otHours}h`;
+        else otLabel = `${otHours}h ${otMinutes}m`;
+        shiftTimeText += `  +OT: ${otLabel}`;
+    }
+    document.getElementById('shiftTime').textContent = shiftTimeText;
+
+        // no shiftStats element per user request
+
+    // Toggle overtime UI + colors
+    if (overtimeMs > 0) {
+        if (otAreaEl) otAreaEl.style.display = 'block';
+        if (otFillEl) otFillEl.style.display = 'block';
+        // primary fill becomes orange when overtime exists
+        if (fillEl) fillEl.style.background = 'linear-gradient(90deg, #fb923c, #f97316)';
+    } else {
+        if (otAreaEl) otAreaEl.style.display = 'none';
+        if (otFillEl) otFillEl.style.display = 'none';
+        if (fillEl) fillEl.style.background = 'linear-gradient(90deg, #4299e1, #3b82f6)';
+    }
+
+    document.getElementById('shiftName').textContent = state.currentShiftName || 'Current Shift';
+}
+
+// ============================================================================
+// Firestore schedule fetching + helpers
+// ============================================================================
+
+function parseTimeForDate(baseDateStr, timeStr) {
+    // baseDateStr: 'YYYY-MM-DD', timeStr: 'HH:MM'
+    // Create Date using local components to avoid timezone parsing issues
+    const [y, m, d] = baseDateStr.split('-').map(n => parseInt(n, 10));
+    const [hh, mm] = timeStr.split(':').map(n => parseInt(n, 10));
+    return new Date(y, m - 1, d, hh || 0, mm || 0, 0, 0);
+}
+
+async function fetchSchedulesForDates(dateStrs) {
+    state.fetchErrors = [];
+    const results = [];
+    for (const ds of dateStrs) {
+        try {
+            const dref = doc(db, 'schedules', ds);
+            const snap = await getDoc(dref);
+            if (snap.exists()) {
+                results.push({ date: ds, data: snap.data() });
+            }
+        } catch (err) {
+            console.error('Error fetching schedule', ds, err);
+            state.fetchErrors.push({ date: ds, message: err.message });
+        }
+    }
+    state.lastFetchedDocs = results;
+    return results;
+}
+
+function buildShiftInstances(scheduleDocs) {
+    const instances = [];
+    for (const s of scheduleDocs) {
+        const base = s.date; // YYYY-MM-DD
+        const shifts = s.data.shifts || [];
+        shifts.forEach(sh => {
+            const start = parseTimeForDate(base, sh.start);
+            let end = parseTimeForDate(base, sh.end);
+            if (end <= start) {
+                // overnight -> next day
+                end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+            }
+            instances.push({ name: sh.shift, start, end, raw: sh });
+        });
+    }
+    return instances;
+}
+
+async function loadCurrentShiftFromFirestore() {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // fetch surrounding days to handle overnight shifts stored on adjacent docs
+    const docs = await fetchSchedulesForDates([yesterday, today, tomorrow]);
+    let instances = buildShiftInstances(docs);
+
+    // If no docs returned or fetch errors occurred, fall back to a local schedule heuristic
+    if ((!docs || docs.length === 0) || (state.fetchErrors && state.fetchErrors.length > 0)) {
+        const fallback = buildFallbackInstances();
+        instances = instances.concat(fallback);
+    }
+
+    const nowTs = now.getTime();
+    // find active shift
+    const active = instances.find(inst => nowTs >= inst.start.getTime() && nowTs <= inst.end.getTime());
+    if (active) {
+        state.shiftStartTime = active.start.getTime();
+        state.shiftEndTime = active.end.getTime();
+        // regular and overtime (hours) come from raw
+        const regularHours = (active.raw && typeof active.raw.duration === 'number') ? active.raw.duration : Math.round((active.end.getTime() - active.start.getTime()) / (1000*60*60));
+        const overtimeHours = (active.raw && typeof active.raw.overtime === 'number') ? active.raw.overtime : 0;
+        state.shiftRegularMs = regularHours * 60 * 60 * 1000;
+        state.shiftOvertimeMs = overtimeHours * 60 * 60 * 1000;
+        state.shiftTotalMs = state.shiftRegularMs + state.shiftOvertimeMs;
+        state.shiftDurationHours = Math.max(1, Math.round(state.shiftTotalMs / (1000 * 60 * 60)));
+        state.currentShiftName = active.name;
+    } else {
+        // no active shift; clear
+        state.currentShiftName = null;
+        state.shiftRegularMs = 0;
+        state.shiftOvertimeMs = 0;
+        state.shiftTotalMs = 0;
+    }
+    // Update debug panel with fetch info and selected instance
+    const debugEl = document.getElementById('shiftDebug');
+    const debugPre = document.getElementById('shiftDebugPre');
+    if (debugEl && debugPre) {
+        const info = {
+            now: new Date().toString(),
+            fetchedDocs: state.lastFetchedDocs || [],
+            fetchErrors: state.fetchErrors || []
+        };
+        if (active) info.selected = { name: active.name, start: active.start.toString(), end: active.end.toString(), raw: active.raw };
+        debugPre.textContent = JSON.stringify(info, null, 2);
+        // show debug only on errors by default
+        debugEl.style.display = (info.fetchErrors && info.fetchErrors.length > 0) ? 'block' : 'none';
+        const closeBtn = document.getElementById('shiftDebugClose');
+        if (closeBtn) {
+            closeBtn.onclick = () => { debugEl.style.display = 'none'; };
+        }
+    }
+
+    updateShiftProgress();
+}
+
+// Build a small set of fallback shift instances based on local time ranges so UI can still render
+function buildFallbackInstances() {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const instances = [];
+    // Morning: 07:30 - 15:30
+    instances.push({ name: 'Morning Shift', start: parseTimeForDate(todayStr, '07:30'), end: parseTimeForDate(todayStr, '15:30'), raw: { duration: 8, overtime: 0 } });
+    // Afternoon: 15:30 - 23:30
+    instances.push({ name: 'Afternoon Shift', start: parseTimeForDate(todayStr, '15:30'), end: parseTimeForDate(todayStr, '23:30'), raw: { duration: 8, overtime: 0 } });
+    // Night (overnight): yesterday 19:30 -> today 07:30
+    instances.push({ name: 'Night Shift', start: parseTimeForDate(yesterdayStr, '19:30'), end: parseTimeForDate(todayStr, '07:30'), raw: { duration: 8, overtime: 4 } });
+
+    return instances;
 }
 
 // ============================================================================
@@ -1107,6 +1304,13 @@ function init() {
     renderWorkersList();
     updateStats();
     updateShiftProgress();
+    // Load shift info from Firestore and refresh periodically
+    try {
+        loadCurrentShiftFromFirestore();
+        setInterval(loadCurrentShiftFromFirestore, 5 * 60 * 1000);
+    } catch (err) {
+        console.error('Error loading shift from Firestore', err);
+    }
     setupEventListeners();
     
     // Update shift progress every minute
