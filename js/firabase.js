@@ -41,4 +41,50 @@ async function fetchSchedulesByDateRange(startDate, endDate) {
   }
 }
 
-export { db, getAuth, getStorage, getFunctions, doc, getDoc, collection, query, where, orderBy, getDocs, fetchSchedulesByDateRange };
+async function fetchWorkerSchedulesByWeekStarts(weekStarts) {
+  try {
+    if (!Array.isArray(weekStarts) || weekStarts.length === 0) return [];
+
+    const out = [];
+    const chunkSize = 10; // Firestore 'in' query limit
+    for (let i = 0; i < weekStarts.length; i += chunkSize) {
+      const chunk = weekStarts.slice(i, i + chunkSize);
+      const colRef = collection(db, 'workerSchedules');
+      const q = query(colRef, where('weekStart', 'in', chunk));
+      const snap = await getDocs(q);
+      snap.forEach(d => out.push({ id: d.id, data: d.data() }));
+    }
+    return out;
+  } catch (err) {
+    console.error('fetchWorkerSchedulesByWeekStarts error', err);
+    throw err;
+  }
+}
+
+async function fetchAllWorkers() {
+  try {
+    const colRef = collection(db, 'workers');
+    const snap = await getDocs(colRef);
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, data: d.data() }));
+    return out;
+  } catch (err) {
+    console.error('fetchAllWorkers error', err);
+    throw err;
+  }
+}
+
+async function fetchAllWorkerSchedules() {
+  try {
+    const colRef = collection(db, 'workerSchedules');
+    const snap = await getDocs(colRef);
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, data: d.data() }));
+    return out;
+  } catch (err) {
+    console.error('fetchAllWorkerSchedules error', err);
+    throw err;
+  }
+}
+
+export { db, getAuth, getStorage, getFunctions, doc, getDoc, collection, query, where, orderBy, getDocs, fetchSchedulesByDateRange, fetchWorkerSchedulesByWeekStarts, fetchAllWorkers, fetchAllWorkerSchedules };

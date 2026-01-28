@@ -1,4 +1,4 @@
-import { db, doc, getDoc, fetchSchedulesByDateRange } from './firabase.js';
+import { db, doc, getDoc, fetchSchedulesByDateRange, fetchAllWorkers } from './firabase.js';
 
 // ============================================================================
 // STATE MANAGEMENT
@@ -289,17 +289,393 @@ function formatShiftForDisplay(baseDateStr, sh) {
     return `${startText} — ${endText}`;
 }
 
+const ROTATION_ORDER = ['morning', 'night', 'afternoon'];
+const ANCHOR_DATE = '2026-01-18'; // YYYY-MM-DD
+const SHIFT_DEFS = {
+    morning: { start: '07:30', end: '19:30', duration: 12, overtime: 4 },
+    night: { start: '19:30', end: '07:30', duration: 12, overtime: 4 },
+    afternoon: { start: '15:30', end: '23:30', duration: 8, overtime: 0 }
+};
+
+function parseLocalDate(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(n => parseInt(n, 10));
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+function formatLocalDate(date) {
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function getWeekStartSunday(date) {
+    const d = new Date(date.getTime());
+    const day = d.getDay(); // 0 = Sunday
+    d.setDate(d.getDate() - day);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+function getRotationIndex(shift) {
+    const idx = ROTATION_ORDER.indexOf((shift || '').toLowerCase());
+    return idx === -1 ? 0 : idx;
+}
+
+function computeAssignedShift(initialShift, weekStartDate) {
+    const anchor = getWeekStartSunday(parseLocalDate(ANCHOR_DATE));
+    const weeksSince = Math.floor((weekStartDate.getTime() - anchor.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    const baseIdx = getRotationIndex(initialShift || 'morning');
+    const idx = (baseIdx + (weeksSince % ROTATION_ORDER.length) + ROTATION_ORDER.length) % ROTATION_ORDER.length;
+    return ROTATION_ORDER[idx];
+}
+
+function buildDayEntry(dateStr, assignedShift) {
+    const shift = SHIFT_DEFS[assignedShift];
+    if (!shift) return {};
+
+    const weekday = new Date(dateStr + 'T00:00:00').getDay();
+    if (assignedShift === 'afternoon' && (weekday === 0 || weekday === 1 || weekday === 6)) {
+        return { status: 'off' };
+    }
+
+    return {
+        shift: assignedShift,
+        status: 'scheduled',
+        start: shift.start,
+        end: shift.end,
+        duration: shift.duration,
+        overtime: shift.overtime
+    };
+}
+
+function mergeOverride(baseDay, override) {
+    if (!override) return baseDay;
+    return { ...baseDay, ...override };
+}
+
+function buildSyntheticWorkerScheduleDocs(workers, startDateStr, endDateStr) {
+    const start = parseLocalDate(startDateStr);
+    const end = parseLocalDate(endDateStr);
+    const out = [];
+
+    (workers || []).forEach(w => {
+        const data = w.data || {};
+        const workerId = w.id;
+        const initialShift = data.initialShift || data.currentShift || 'morning';
+        const rotationEnabled = data.rotationEnabled !== false;
+        const manualOverrides = data.manualOverrides || {};
+        const days = {};
+
+        for (let d = new Date(start.getTime()); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+            const dateStr = formatLocalDate(d);
+            const weekStart = getWeekStartSunday(d);
+            let assignedShift = initialShift;
+            if (rotationEnabled) {
+                assignedShift = computeAssignedShift(initialShift, weekStart);
+            }
+            const baseDay = buildDayEntry(dateStr, assignedShift);
+            const override = manualOverrides[dateStr];
+            days[dateStr] = mergeOverride(baseDay, override);
+        }
+
+        out.push({
+            id: workerId,
+            data: {
+                workerId,
+                assignedShift: initialShift,
+                days
+            }
+        });
+    });
+
+    return out;
+}
+
+function getWeekStartStringsInRange(startDateStr, endDateStr) {
+    if (!startDateStr || !endDateStr) return [];
+    const start = parseLocalDate(startDateStr);
+    const end = parseLocalDate(endDateStr);
+    if (start.getTime() > end.getTime()) return [];
+
+    const set = new Set();
+    for (let d = new Date(start.getTime()); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+        const weekStart = getWeekStartSunday(d);
+        set.add(formatLocalDate(weekStart));
+    }
+    return Array.from(set);
+}
+
+function buildScheduleMetaMap(scheduleDocs) {
+    const meta = {};
+    (scheduleDocs || []).forEach(d => {
+        const data = d.data || {};
+        const dateStr = data.date || d.id;
+        if (!dateStr) return;
+        if (!meta[dateStr]) meta[dateStr] = {};
+        const shifts = Array.isArray(data.shifts) ? data.shifts : [];
+        shifts.forEach(sh => {
+            const name = (sh.shift || sh.shiftName || '').toLowerCase();
+            if (!name) return;
+            const start = (typeof sh.start === 'number') ? minutesToHHMM(sh.start) : String(sh.start || '');
+            const end = (typeof sh.end === 'number') ? minutesToHHMM(sh.end) : String(sh.end || '');
+            meta[dateStr][name] = {
+                start,
+                end,
+                duration: (typeof sh.duration === 'number') ? sh.duration : undefined,
+                overtime: (typeof sh.overtime === 'number') ? sh.overtime : undefined
+            };
+        });
+    });
+    return meta;
+}
+
+function buildWorkerScheduleDayMap(workers, startDateStr, endDateStr) {
+    const dayMap = {};
+    const start = parseLocalDate(startDateStr);
+    const end = parseLocalDate(endDateStr);
+
+    for (let d = new Date(start.getTime()); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+        dayMap[formatLocalDate(d)] = [];
+    }
+
+    (workers || []).forEach(w => {
+        const data = w.data || {};
+        const workerId = w.id;
+        const workerName = data.name || workerId;
+        const shift = (data.currentShift || '').toLowerCase();
+        const status = data.status || '';
+
+        Object.keys(dayMap).forEach(dateStr => {
+            dayMap[dateStr].push({
+                workerId,
+                workerName,
+                shift,
+                status,
+                start: '',
+                end: '',
+                duration: undefined,
+                overtime: undefined
+            });
+        });
+    });
+
+    return dayMap;
+}
+
+function buildShiftBuckets(entries) {
+    const buckets = {
+        morning: [],
+        afternoon: [],
+        night: [],
+        off: [],
+        other: []
+    };
+    (entries || []).forEach(entry => {
+        const status = (entry.status || '').toLowerCase();
+        if (status === 'off') {
+            buckets.off.push(entry);
+            return;
+        }
+        const shift = (entry.shift || '').toLowerCase();
+        if (shift === 'morning') buckets.morning.push(entry);
+        else if (shift === 'afternoon') buckets.afternoon.push(entry);
+        else if (shift === 'night') buckets.night.push(entry);
+        else buckets.other.push(entry);
+    });
+    return buckets;
+}
+
+function getShiftLabelAndTimes(shiftKey, entries, scheduleMeta) {
+    const key = (shiftKey || '').toLowerCase();
+    if (scheduleMeta && scheduleMeta[key]) {
+        return {
+            label: key,
+            start: scheduleMeta[key].start,
+            end: scheduleMeta[key].end,
+            duration: scheduleMeta[key].duration,
+            overtime: scheduleMeta[key].overtime
+        };
+    }
+    if (SHIFT_DEFS[key]) {
+        return {
+            label: key,
+            start: SHIFT_DEFS[key].start,
+            end: SHIFT_DEFS[key].end,
+            duration: SHIFT_DEFS[key].duration,
+            overtime: SHIFT_DEFS[key].overtime
+        };
+    }
+
+    const withTime = (entries || []).find(e => e.start && e.end);
+    if (withTime) {
+        return {
+            label: key || 'other',
+            start: withTime.start,
+            end: withTime.end,
+            duration: withTime.duration,
+            overtime: withTime.overtime
+        };
+    }
+
+    return { label: key || 'other', start: '', end: '', duration: undefined, overtime: undefined };
+}
+
+function renderWorkerScheduleTable(workers, startDateStr, endDateStr, scheduleDocs) {
+    const container = document.getElementById('scheduleContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const table = document.createElement('table');
+    table.className = 'schedule-table';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Date</th><th>Weekday</th><th>Shifts</th></tr>';
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+
+    const dayMap = buildWorkerScheduleDayMap(workers, startDateStr, endDateStr);
+    const scheduleMetaMap = buildScheduleMetaMap(scheduleDocs);
+    const dateKeys = Object.keys(dayMap);
+
+    if (!dateKeys || dateKeys.length === 0) {
+        const r = document.createElement('tr');
+        r.innerHTML = '<td colspan="3" style="text-align:center;color:#718096;padding:12px;">No worker schedules found for range.</td>';
+        tbody.appendChild(r);
+    } else {
+        dateKeys.forEach(dateStr => {
+            const row = document.createElement('tr');
+            const dateCell = document.createElement('td');
+            dateCell.textContent = dateStr;
+
+            const weekdayCell = document.createElement('td');
+            const weekday = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+            weekdayCell.textContent = weekday;
+
+            const shiftsCell = document.createElement('td');
+            const entries = dayMap[dateStr] || [];
+            if (entries.length === 0) {
+                shiftsCell.textContent = '—';
+            } else {
+                const buckets = buildShiftBuckets(entries);
+                const ordered = [
+                    { key: 'morning', label: 'Morning' },
+                    { key: 'afternoon', label: 'Afternoon' },
+                    { key: 'night', label: 'Night' },
+                    { key: 'off', label: 'Off' },
+                    { key: 'other', label: 'Other' }
+                ];
+
+                ordered.forEach(({ key, label }) => {
+                    const list = buckets[key] || [];
+                    if (list.length === 0) return;
+
+                    const details = document.createElement('details');
+                    details.className = `shift-group shift-${key}`;
+                    details.style.marginBottom = '6px';
+
+                    const summary = document.createElement('summary');
+                    summary.className = 'shift-summary';
+
+                    const title = document.createElement('span');
+                    title.className = 'shift-summary-title';
+                    title.textContent = `${label} (${list.length})`;
+
+                    const meta = document.createElement('span');
+                    meta.className = 'shift-summary-meta';
+
+                    const timeMeta = getShiftLabelAndTimes(key, list, scheduleMetaMap[dateStr]);
+                    if (timeMeta.start && timeMeta.end) {
+                        let metaText = `${timeMeta.start} — ${timeMeta.end}`;
+                        if (typeof timeMeta.duration === 'number') {
+                            metaText += ` • ${timeMeta.duration}h`;
+                        }
+                        if (typeof timeMeta.overtime === 'number' && timeMeta.overtime > 0) {
+                            metaText += ` (+${timeMeta.overtime}h OT)`;
+                        }
+                        meta.textContent = metaText;
+                    } else if (key === 'off') {
+                        meta.textContent = 'Off';
+                    } else {
+                        meta.textContent = '—';
+                    }
+
+                    summary.appendChild(title);
+                    summary.appendChild(meta);
+                    details.appendChild(summary);
+
+                    const listWrap = document.createElement('div');
+                    listWrap.style.marginTop = '6px';
+
+                    list.forEach(entry => {
+                        const div = document.createElement('div');
+                        div.className = 'shift-row';
+
+                        const nameSpan = document.createElement('span');
+                        nameSpan.className = 'shift-name';
+                        nameSpan.textContent = entry.workerName;
+
+                        const timeSpan = document.createElement('span');
+                        timeSpan.className = 'shift-time-inline';
+
+                        let detailsText = '';
+                        const scheduleMeta = (scheduleMetaMap[dateStr] && scheduleMetaMap[dateStr][(entry.shift || '').toLowerCase()]) || null;
+                        if (entry.status && entry.status.toLowerCase() === 'off') {
+                            detailsText = 'Off';
+                        } else if (scheduleMeta && scheduleMeta.start && scheduleMeta.end) {
+                            detailsText = `${scheduleMeta.start} — ${scheduleMeta.end}`;
+                        } else if (entry.start && entry.end) {
+                            detailsText = `${entry.start} — ${entry.end}`;
+                        } else {
+                            detailsText = entry.shift || entry.status || '—';
+                        }
+
+                        timeSpan.textContent = detailsText;
+
+                        div.appendChild(nameSpan);
+                        div.appendChild(document.createTextNode(' '));
+                        div.appendChild(timeSpan);
+
+                        if (entry.overtime && Number(entry.overtime) > 0) {
+                            div.classList.add('overtime');
+                        }
+
+                        listWrap.appendChild(div);
+                    });
+
+                    details.appendChild(listWrap);
+                    shiftsCell.appendChild(details);
+                });
+            }
+
+            row.appendChild(dateCell);
+            row.appendChild(weekdayCell);
+            row.appendChild(shiftsCell);
+            tbody.appendChild(row);
+        });
+    }
+
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
 async function fetchSchedulesRangeAndRender(startDate, endDate) {
     try {
-        const docs = await fetchSchedulesByDateRange(startDate, endDate);
+        const [docs, workers] = await Promise.all([
+            fetchSchedulesByDateRange(startDate, endDate),
+            fetchAllWorkers()
+        ]);
+
         state.lastFetchedDocs = docs;
-        renderScheduleTable(docs);
-        return docs;
+        state.lastWorkerDocs = workers;
+
+        renderWorkerScheduleTable(workers || [], startDate, endDate, docs);
+
+        return { schedules: docs, workers };
     } catch (err) {
         console.error('Error loading schedules for range', err);
         state.fetchErrors = state.fetchErrors || [];
         state.fetchErrors.push({ range: [startDate, endDate], message: err.message });
-        renderScheduleTable([]);
+        renderWorkerScheduleTable([], startDate, endDate, []);
         throw err;
     }
 }
