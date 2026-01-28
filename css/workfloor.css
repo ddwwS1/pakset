@@ -655,7 +655,7 @@ body {
 .scrollable-list {
     max-height: 600px;
     overflow-y: auto;
-    padding-right: 8px;
+    padding: 16px 14px 16px 12px;
 }
 
 .scrollable-list::-webkit-scrollbar {
@@ -840,6 +840,154 @@ body {
     padding: 16px;
     margin-bottom: 12px;
     box-shadow: 6px 6px 12px #a3b1c6, -6px -6px 12px #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.worker-list-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 8px 8px 16px #a3b1c6, -8px -8px 16px #ffffff;
+}
+
+.workers-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.workers-toolbar-info {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.workers-toolbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.workers-filters {
+    display: flex;
+    gap: 6px;
+}
+
+.filter-chip {
+    border: none;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #e0e5ec;
+    color: #64748b;
+    box-shadow: 2px 2px 4px #a3b1c6, -2px -2px 4px #ffffff;
+    transition: all 0.2s ease;
+}
+
+.filter-chip.active {
+    color: #1d4ed8;
+    box-shadow: inset 2px 2px 4px #a3b1c6, inset -2px -2px 4px #ffffff;
+}
+
+.workers-search {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #e0e5ec;
+    color: #94a3b8;
+    box-shadow: inset 2px 2px 4px #a3b1c6, inset -2px -2px 4px #ffffff;
+}
+
+.workers-search input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 12px;
+    color: #2d3748;
+    min-width: 120px;
+}
+
+.worker-list-header {
+    gap: 12px;
+}
+
+.worker-list-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.worker-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    box-shadow: 2px 2px 4px rgba(15, 23, 42, 0.18);
+    cursor: pointer;
+}
+
+.worker-list-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.worker-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.worker-chip {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.2px;
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
+}
+
+.worker-chip.shift.off {
+    background: rgba(100, 116, 139, 0.15);
+    color: #64748b;
+}
+
+.worker-chip.status.assigned {
+    background: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
+.worker-chip.status.unassigned {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+
+.worker-list-role-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.worker-role-icon {
+    color: #94a3b8;
+    display: inline-flex;
 }
 
 .worker-list-header {
@@ -863,12 +1011,11 @@ body {
 
 .worker-list-role {
     font-size: 12px;
-    color: #718096;
+    color: #475569;
     display: inline-block;
-    padding: 2px 8px;
-    border-radius: 6px;
-    background: #e0e5ec;
-    box-shadow: inset 2px 2px 4px #a3b1c6, inset -2px -2px 4px #ffffff;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.12);
 }
 
 .worker-list-details {
@@ -883,8 +1030,11 @@ body {
 
 .worker-assignment {
     font-size: 13px;
-    color: #718096;
+    color: #64748b;
     margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .worker-assignment strong {
@@ -894,6 +1044,7 @@ body {
 .worker-actions {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 .worker-btn {
@@ -906,18 +1057,60 @@ body {
     font-size: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 
 .worker-btn:active {
     box-shadow: inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff;
 }
 
+.worker-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: inset 2px 2px 4px #a3b1c6, inset -2px -2px 4px #ffffff;
+}
+
 .worker-btn-primary {
     color: #4299e1;
 }
 
+.worker-btn-secondary {
+    color: #0f766e;
+}
+
+.worker-btn-ghost {
+    color: #475569;
+}
+
 .worker-btn-danger {
     color: #ef4444;
+}
+
+.worker-btn-icon {
+    display: inline-flex;
+}
+
+.worker-detail-icon {
+    display: inline-flex;
+    color: #94a3b8;
+}
+
+.empty-state {
+    padding: 16px;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 13px;
+    color: #94a3b8;
+    background: rgba(226, 232, 240, 0.6);
+}
+
+.machine-marker.highlighted {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.35), 0 0 18px rgba(59, 130, 246, 0.6);
+    border-radius: 16px;
+    transition: box-shadow 0.2s ease;
 }
 
 /* Add Worker Modal */

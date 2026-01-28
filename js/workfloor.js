@@ -17,7 +17,9 @@ let state = {
     isEditMode: false,
     isAddingTag: false,
     shiftStartTime: new Date().setHours(8, 0, 0, 0),
-    shiftDurationHours: 8
+    shiftDurationHours: 8,
+    workersFilter: 'all',
+    workersSearch: ''
 };
 // Current active shift metadata
 state.currentShiftName = null;
@@ -56,9 +58,113 @@ function getWorkerById(id) {
     return state.workers.find(w => w.id === id);
 }
 
+function normalizeShiftName(name) {
+    const raw = String(name || '').toLowerCase().trim();
+    if (!raw) return '';
+    if (raw.includes('morning')) return 'morning';
+    if (raw.includes('afternoon')) return 'afternoon';
+    if (raw.includes('night')) return 'night';
+    return raw;
+}
+
+function getCurrentShiftKey() {
+    return normalizeShiftName(state.currentShiftKey || state.currentShiftName || '');
+}
+
+function getWorkerAssignedShiftForDate(worker, dateObj) {
+    const data = worker._data || {};
+    const initialShift = data.initialShift || data.currentShift || worker.initialShift || worker.currentShift || 'morning';
+    const rotationEnabled = data.rotationEnabled !== false && worker.rotationEnabled !== false;
+    const weekStart = getWeekStartSunday(dateObj);
+    let assignedShift = rotationEnabled ? computeAssignedShift(initialShift, weekStart) : initialShift;
+
+    const dateStr = formatLocalDate(dateObj);
+    const override = (data.manualOverrides || worker.manualOverrides || {})[dateStr];
+    if (override) {
+        if ((override.status || '').toLowerCase() === 'off') return 'off';
+        if (override.shift) assignedShift = override.shift;
+    }
+
+    return assignedShift;
+}
+
+function getCurrentShiftWorkers() {
+    const shiftKey = getCurrentShiftKey();
+    if (!shiftKey) return state.workers;
+    const today = new Date();
+
+    return state.workers.filter(worker => {
+        const assignedShift = getWorkerAssignedShiftForDate(worker, today);
+        if (!assignedShift) return false;
+        if (String(assignedShift).toLowerCase() === 'off') return false;
+        return normalizeShiftName(assignedShift) === shiftKey;
+    });
+}
+
+function getWorkerInitials(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'W';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function getAvatarColor(key) {
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#ef4444', '#14b8a6', '#f97316', '#6366f1'];
+    const str = String(key || '');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return colors[Math.abs(hash) % colors.length];
+}
+
+function getShiftLabelForWorker(worker) {
+    const shift = getWorkerAssignedShiftForDate(worker, new Date());
+    if (!shift) return '—';
+    if (String(shift).toLowerCase() === 'off') return 'Off';
+    const normalized = normalizeShiftName(shift);
+    return normalized ? (normalized.charAt(0).toUpperCase() + normalized.slice(1)) : String(shift);
+}
+
+function copyWorkerName(name) {
+    const text = String(name || '').trim();
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+        return;
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        document.execCommand('copy');
+    } catch (e) {
+        console.error('Copy failed', e);
+    } finally {
+        document.body.removeChild(textarea);
+    }
+}
+
+function focusMachineMarker(machineId) {
+    if (!machineId) return;
+    const marker = document.querySelector(`.machine-marker[data-id="${machineId}"]`);
+    if (!marker) return;
+    marker.classList.add('highlighted');
+    try {
+        marker.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    } catch (e) {
+        // ignore scroll failures
+    }
+    setTimeout(() => marker.classList.remove('highlighted'), 1500);
+}
+
 function updateStats() {
     const runningMachines = state.machines.filter(m => m.status === 'running').length;
-    const totalWorkers = state.workers.length;
+    const totalWorkers = getCurrentShiftWorkers().length;
     const maintenanceMachines = state.machines.filter(m => m.status === 'maintenance').length;
     const runningMachinesList = state.machines.filter(m => m.status === 'running');
     const avgEfficiency = runningMachinesList.length > 0
@@ -405,14 +511,6 @@ function getWeekStartStringsInRange(startDateStr, endDateStr) {
 }
 
 function buildScheduleMetaMap(scheduleDocs) {
-    const normalizeShiftName = (name) => {
-        const raw = String(name || '').toLowerCase().trim();
-        if (!raw) return '';
-        if (raw.includes('morning')) return 'morning';
-        if (raw.includes('afternoon')) return 'afternoon';
-        if (raw.includes('night')) return 'night';
-        return raw;
-    };
     const meta = {};
     (scheduleDocs || []).forEach(d => {
         const data = d.data || {};
@@ -676,6 +774,31 @@ async function fetchSchedulesRangeAndRender(startDate, endDate) {
     }
 }
 
+async function loadWorkersFromFirestore() {
+    try {
+        const workers = await fetchAllWorkers();
+        state.workers = (workers || []).map(w => {
+            const data = w.data || {};
+            return {
+                id: w.id,
+                name: data.name || w.id,
+                role: data.role || 'Worker',
+                assignedMachine: data.assignedMachine || null,
+                currentShift: data.currentShift,
+                initialShift: data.initialShift,
+                rotationEnabled: data.rotationEnabled,
+                manualOverrides: data.manualOverrides,
+                status: data.status,
+                _data: data
+            };
+        });
+        renderWorkersList();
+        updateStats();
+    } catch (err) {
+        console.error('Error loading workers', err);
+    }
+}
+
 function renderScheduleTable(docs) {
     const container = document.getElementById('scheduleContainer');
     if (!container) return;
@@ -773,9 +896,11 @@ async function loadCurrentShiftFromFirestore() {
         state.shiftTotalMs = state.shiftRegularMs + state.shiftOvertimeMs;
         state.shiftDurationHours = Math.max(1, Math.round(state.shiftTotalMs / (1000 * 60 * 60)));
         state.currentShiftName = active.name;
+        state.currentShiftKey = normalizeShiftName((active.raw && (active.raw.shift || active.raw.shiftName)) || active.name || '');
     } else {
         // no active shift; clear
         state.currentShiftName = null;
+        state.currentShiftKey = '';
         state.shiftRegularMs = 0;
         state.shiftOvertimeMs = 0;
         state.shiftTotalMs = 0;
@@ -807,6 +932,8 @@ async function loadCurrentShiftFromFirestore() {
     }
 
     updateShiftProgress();
+    renderWorkersList();
+    updateStats();
 }
 
 // Build a small set of fallback shift instances based on local time ranges so UI can still render
@@ -1120,11 +1247,92 @@ function createTodoItem(machineId, todo) {
     return item;
 }
 
-function renderWorkersList() {
+function renderWorkersList(keepSearchFocus = false, caretPos = null) {
     const container = document.getElementById('workersList');
     container.innerHTML = '';
-    
-    state.workers.forEach(worker => {
+
+    const visibleWorkers = getCurrentShiftWorkers();
+    const shiftLabel = getCurrentShiftKey();
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'workers-toolbar';
+
+    const info = document.createElement('div');
+    info.className = 'workers-toolbar-info';
+    const shiftText = shiftLabel ? `${shiftLabel.charAt(0).toUpperCase() + shiftLabel.slice(1)} shift` : 'All shifts';
+    info.textContent = `${shiftText} • ${visibleWorkers.length} worker${visibleWorkers.length !== 1 ? 's' : ''}`;
+
+    const controls = document.createElement('div');
+    controls.className = 'workers-toolbar-controls';
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'workers-search';
+    searchWrap.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search workers';
+    searchInput.value = state.workersSearch || '';
+    searchInput.addEventListener('input', (e) => {
+        const nextValue = e.target.value;
+        const nextCaret = e.target.selectionStart;
+        state.workersSearch = nextValue;
+        renderWorkersList(true, nextCaret);
+    });
+    searchWrap.appendChild(searchInput);
+
+    const filters = document.createElement('div');
+    filters.className = 'workers-filters';
+    ['all', 'assigned', 'unassigned'].forEach(key => {
+        const btn = document.createElement('button');
+        btn.className = 'filter-chip' + (state.workersFilter === key ? ' active' : '');
+        btn.textContent = key === 'all' ? 'All' : (key === 'assigned' ? 'Assigned' : 'Unassigned');
+        btn.addEventListener('click', () => {
+            state.workersFilter = key;
+            renderWorkersList();
+        });
+        filters.appendChild(btn);
+    });
+
+    controls.appendChild(filters);
+    controls.appendChild(searchWrap);
+    toolbar.appendChild(info);
+    toolbar.appendChild(controls);
+    container.appendChild(toolbar);
+
+    if (keepSearchFocus) {
+        setTimeout(() => {
+            searchInput.focus();
+            if (typeof caretPos === 'number') {
+                searchInput.setSelectionRange(caretPos, caretPos);
+            }
+        }, 0);
+    }
+
+    let filteredWorkers = [...visibleWorkers];
+    if (state.workersFilter === 'assigned') {
+        filteredWorkers = filteredWorkers.filter(w => !!w.assignedMachine);
+    } else if (state.workersFilter === 'unassigned') {
+        filteredWorkers = filteredWorkers.filter(w => !w.assignedMachine);
+    }
+    const query = (state.workersSearch || '').trim().toLowerCase();
+    if (query) {
+        filteredWorkers = filteredWorkers.filter(w => {
+            const hay = `${w.name || ''} ${w.role || ''}`.toLowerCase();
+            return hay.includes(query);
+        });
+    }
+
+    if (!filteredWorkers || filteredWorkers.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = query || state.workersFilter !== 'all'
+            ? 'No workers match the current filters.'
+            : 'No workers scheduled for the current shift.';
+        container.appendChild(empty);
+        return;
+    }
+
+    filteredWorkers.forEach(worker => {
         const item = createWorkerListItem(worker);
         container.appendChild(item);
     });
@@ -1137,26 +1345,70 @@ function createWorkerListItem(worker) {
     // Header
     const header = document.createElement('div');
     header.className = 'worker-list-header';
+
+    const main = document.createElement('div');
+    main.className = 'worker-list-main';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'worker-avatar';
+    avatar.textContent = getWorkerInitials(worker.name);
+    avatar.style.background = getAvatarColor(worker.name || worker.id);
+    avatar.title = 'Copy name';
+    avatar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyWorkerName(worker.name);
+    });
     
     const info = document.createElement('div');
     info.className = 'worker-list-info';
     
+    const nameRow = document.createElement('div');
+    nameRow.className = 'worker-list-name-row';
+
     const name = document.createElement('div');
     name.className = 'worker-list-name';
     name.textContent = worker.name;
-    
+
+    const chips = document.createElement('div');
+    chips.className = 'worker-chips';
+
+    const shiftChip = document.createElement('span');
+    const shiftLabel = getShiftLabelForWorker(worker);
+    shiftChip.className = 'worker-chip shift' + (shiftLabel === 'Off' ? ' off' : '');
+    shiftChip.textContent = shiftLabel;
+
+    const statusChip = document.createElement('span');
+    const isAssigned = !!worker.assignedMachine;
+    statusChip.className = 'worker-chip status ' + (isAssigned ? 'assigned' : 'unassigned');
+    statusChip.textContent = isAssigned ? 'Assigned' : 'Unassigned';
+
+    chips.appendChild(shiftChip);
+    chips.appendChild(statusChip);
+
+    nameRow.appendChild(name);
+    nameRow.appendChild(chips);
+
+    const roleRow = document.createElement('div');
+    roleRow.className = 'worker-list-role-row';
+    roleRow.innerHTML = '<span class="worker-role-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 4-7 8-7s8 3 8 7"></path></svg></span>';
+
     const role = document.createElement('div');
     role.className = 'worker-list-role';
-    role.textContent = worker.role;
-    
-    info.appendChild(name);
-    info.appendChild(role);
+    role.textContent = worker.role || 'Worker';
+
+    roleRow.appendChild(role);
+
+    info.appendChild(nameRow);
+    info.appendChild(roleRow);
     
     const expandIcon = document.createElement('div');
     expandIcon.className = 'expand-icon';
     expandIcon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
-    
-    header.appendChild(info);
+
+    main.appendChild(avatar);
+    main.appendChild(info);
+
+    header.appendChild(main);
     header.appendChild(expandIcon);
     
     // Details
@@ -1165,12 +1417,12 @@ function createWorkerListItem(worker) {
     
     const assignment = document.createElement('div');
     assignment.className = 'worker-assignment';
-    
+
     if (worker.assignedMachine) {
         const machine = getMachineById(worker.assignedMachine);
-        assignment.innerHTML = `<strong>Assigned to:</strong> ${machine ? machine.name : 'Unknown'}`;
+        assignment.innerHTML = `<span class="worker-detail-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18v10H3z"></path><path d="M7 7V5h10v2"></path><path d="M7 17v2h10v-2"></path></svg></span><strong>Assigned to:</strong> ${machine ? machine.name : 'Unknown'}`;
     } else {
-        assignment.innerHTML = '<strong>Status:</strong> Unassigned';
+        assignment.innerHTML = '<span class="worker-detail-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg></span><strong>Status:</strong> Unassigned';
     }
     
     const actions = document.createElement('div');
@@ -1178,15 +1430,40 @@ function createWorkerListItem(worker) {
     
     const assignBtn = document.createElement('button');
     assignBtn.className = 'worker-btn worker-btn-primary';
-    assignBtn.textContent = worker.assignedMachine ? 'Reassign' : 'Assign';
-    assignBtn.addEventListener('click', () => assignWorker(worker.id));
+    assignBtn.innerHTML = `<span class="worker-btn-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg></span>${worker.assignedMachine ? 'Reassign' : 'Assign'}`;
+    assignBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        assignWorker(worker.id);
+    });
+
+    const focusBtn = document.createElement('button');
+    focusBtn.className = 'worker-btn worker-btn-secondary';
+    focusBtn.innerHTML = '<span class="worker-btn-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M22 12h-4"></path><path d="M6 12H2"></path><path d="M12 2v4"></path><path d="M12 22v-4"></path></svg></span>Locate';
+    focusBtn.disabled = !worker.assignedMachine;
+    focusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (worker.assignedMachine) focusMachineMarker(worker.assignedMachine);
+    });
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'worker-btn worker-btn-ghost';
+    copyBtn.innerHTML = '<span class="worker-btn-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><rect x="2" y="2" width="13" height="13" rx="2"></rect></svg></span>Copy';
+    copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyWorkerName(worker.name);
+    });
     
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'worker-btn worker-btn-danger';
-    deleteBtn.textContent = 'Remove';
-    deleteBtn.addEventListener('click', () => deleteWorker(worker.id));
+    deleteBtn.innerHTML = '<span class="worker-btn-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 14h10l1-14"></path></svg></span>Remove';
+    deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteWorker(worker.id);
+    });
     
     actions.appendChild(assignBtn);
+    actions.appendChild(focusBtn);
+    actions.appendChild(copyBtn);
     actions.appendChild(deleteBtn);
     
     details.appendChild(assignment);
@@ -1920,6 +2197,7 @@ function init() {
     renderWorkersList();
     updateStats();
     updateShiftProgress();
+    loadWorkersFromFirestore();
     // Load shift info from Firestore and refresh periodically
     try {
         loadCurrentShiftFromFirestore();
