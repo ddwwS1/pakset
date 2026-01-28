@@ -405,6 +405,14 @@ function getWeekStartStringsInRange(startDateStr, endDateStr) {
 }
 
 function buildScheduleMetaMap(scheduleDocs) {
+    const normalizeShiftName = (name) => {
+        const raw = String(name || '').toLowerCase().trim();
+        if (!raw) return '';
+        if (raw.includes('morning')) return 'morning';
+        if (raw.includes('afternoon')) return 'afternoon';
+        if (raw.includes('night')) return 'night';
+        return raw;
+    };
     const meta = {};
     (scheduleDocs || []).forEach(d => {
         const data = d.data || {};
@@ -413,7 +421,7 @@ function buildScheduleMetaMap(scheduleDocs) {
         if (!meta[dateStr]) meta[dateStr] = {};
         const shifts = Array.isArray(data.shifts) ? data.shifts : [];
         shifts.forEach(sh => {
-            const name = (sh.shift || sh.shiftName || '').toLowerCase();
+            const name = normalizeShiftName(sh.shift || sh.shiftName || '');
             if (!name) return;
             const start = (typeof sh.start === 'number') ? minutesToHHMM(sh.start) : String(sh.start || '');
             const end = (typeof sh.end === 'number') ? minutesToHHMM(sh.end) : String(sh.end || '');
@@ -428,14 +436,11 @@ function buildScheduleMetaMap(scheduleDocs) {
     return meta;
 }
 
-function buildWorkerScheduleDayMap(workers, startDateStr, endDateStr) {
+function buildWorkerScheduleDayMap(workers, dateKeys) {
     const dayMap = {};
-    const start = parseLocalDate(startDateStr);
-    const end = parseLocalDate(endDateStr);
-
-    for (let d = new Date(start.getTime()); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
-        dayMap[formatLocalDate(d)] = [];
-    }
+    (dateKeys || []).forEach(dateStr => {
+        dayMap[dateStr] = [];
+    });
 
     (workers || []).forEach(w => {
         const data = w.data || {};
@@ -495,27 +500,6 @@ function getShiftLabelAndTimes(shiftKey, entries, scheduleMeta) {
             overtime: scheduleMeta[key].overtime
         };
     }
-    if (SHIFT_DEFS[key]) {
-        return {
-            label: key,
-            start: SHIFT_DEFS[key].start,
-            end: SHIFT_DEFS[key].end,
-            duration: SHIFT_DEFS[key].duration,
-            overtime: SHIFT_DEFS[key].overtime
-        };
-    }
-
-    const withTime = (entries || []).find(e => e.start && e.end);
-    if (withTime) {
-        return {
-            label: key || 'other',
-            start: withTime.start,
-            end: withTime.end,
-            duration: withTime.duration,
-            overtime: withTime.overtime
-        };
-    }
-
     return { label: key || 'other', start: '', end: '', duration: undefined, overtime: undefined };
 }
 
@@ -533,16 +517,30 @@ function renderWorkerScheduleTable(workers, startDateStr, endDateStr, scheduleDo
 
     const tbody = document.createElement('tbody');
 
-    const dayMap = buildWorkerScheduleDayMap(workers, startDateStr, endDateStr);
-    const scheduleMetaMap = buildScheduleMetaMap(scheduleDocs);
-    const dateKeys = Object.keys(dayMap);
-
+    let dateKeys = [];
+    if (scheduleDocs && scheduleDocs.length > 0) {
+        dateKeys = scheduleDocs
+            .map(d => (d.data && d.data.date) ? String(d.data.date) : d.id)
+            .filter(Boolean);
+    }
     if (!dateKeys || dateKeys.length === 0) {
+        const start = parseLocalDate(startDateStr);
+        const end = parseLocalDate(endDateStr);
+        for (let d = new Date(start.getTime()); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+            dateKeys.push(formatLocalDate(d));
+        }
+    }
+
+    const dayMap = buildWorkerScheduleDayMap(workers, dateKeys);
+    const scheduleMetaMap = buildScheduleMetaMap(scheduleDocs);
+    const sortedDateKeys = Object.keys(dayMap).sort();
+
+    if (!sortedDateKeys || sortedDateKeys.length === 0) {
         const r = document.createElement('tr');
         r.innerHTML = '<td colspan="3" style="text-align:center;color:#718096;padding:12px;">No worker schedules found for range.</td>';
         tbody.appendChild(r);
     } else {
-        dateKeys.forEach(dateStr => {
+        sortedDateKeys.forEach(dateStr => {
             const row = document.createElement('tr');
             const dateCell = document.createElement('td');
             dateCell.textContent = dateStr;
@@ -623,10 +621,8 @@ function renderWorkerScheduleTable(workers, startDateStr, endDateStr, scheduleDo
                             detailsText = 'Off';
                         } else if (scheduleMeta && scheduleMeta.start && scheduleMeta.end) {
                             detailsText = `${scheduleMeta.start} — ${scheduleMeta.end}`;
-                        } else if (entry.start && entry.end) {
-                            detailsText = `${entry.start} — ${entry.end}`;
                         } else {
-                            detailsText = entry.shift || entry.status || '—';
+                            detailsText = '';
                         }
 
                         timeSpan.textContent = detailsText;
