@@ -379,6 +379,280 @@ body {
     margin-bottom: 16px;
 }
 
+.factory-floor-map:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.map-viewport {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    touch-action: none;
+}
+
+.map-content {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.map-controls {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 30;
+}
+
+.map-controls-row {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    gap: 6px;
+    align-items: center;
+}
+
+.map-controls-center {
+    grid-template-columns: 1fr;
+    justify-items: center;
+}
+
+.map-control-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: none;
+    background: #e0e5ec;
+    color: #2d3748;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.map-control-btn:active {
+    transform: translateY(1px);
+    box-shadow: inset 4px 4px 8px #a3b1c6, inset -4px -4px 8px #ffffff;
+}
+
+/* Factory Floor Plan (editable layout) */
+.floor-plan {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+}
+
+.floor-paths {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+
+.path-forklift {
+    fill: none;
+    stroke: #f97316;
+    stroke-width: 12;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 14 10;
+    opacity: 0.85;
+}
+
+.path-walk {
+    fill: none;
+    stroke: #3b82f6;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 8;
+    opacity: 0.9;
+}
+
+.floor-zone {
+    position: absolute;
+    border-radius: 12px;
+    background: rgba(226, 232, 240, 0.7);
+    border: 2px solid #a3b1c6;
+    box-shadow: inset 2px 2px 4px rgba(163, 177, 198, 0.6);
+}
+
+.floor-zone.zone-loading {
+    background: rgba(251, 146, 60, 0.18);
+    border-color: #fb923c;
+}
+
+.floor-zone.zone-storage {
+    background: rgba(56, 189, 248, 0.18);
+    border-color: #38bdf8;
+}
+
+.floor-zone.zone-production {
+    background: rgba(34, 197, 94, 0.14);
+    border-color: #22c55e;
+}
+
+.floor-zone.zone-qc {
+    background: rgba(99, 102, 241, 0.16);
+    border-color: #6366f1;
+}
+
+.floor-zone.zone-packing {
+    background: rgba(234, 179, 8, 0.16);
+    border-color: #eab308;
+}
+
+.floor-zone.zone-maintenance {
+    background: rgba(239, 68, 68, 0.14);
+    border-color: #ef4444;
+}
+
+.floor-zone.zone-office {
+    background: rgba(148, 163, 184, 0.18);
+    border-color: #94a3b8;
+}
+
+.floor-zone.zone-break {
+    background: rgba(20, 184, 166, 0.16);
+    border-color: #14b8a6;
+}
+
+.floor-zone.zone-finished {
+    background: rgba(59, 130, 246, 0.14);
+    border-color: #3b82f6;
+}
+
+.zone-label {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    background: rgba(224, 229, 236, 0.85);
+    padding: 2px 8px;
+    border-radius: 999px;
+    box-shadow: 2px 2px 4px rgba(163, 177, 198, 0.5);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.zone-icon {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #1f2937;
+}
+
+.zone-icon svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
+.machine-slot {
+    position: absolute;
+    width: 90px;
+    height: 56px;
+    border-radius: 10px;
+    border: 2px dashed #94a3b8;
+    background: rgba(226, 232, 240, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.machine-slot.rotated {
+    transform: rotate(90deg);
+    transform-origin: center;
+}
+
+.machine-slot.rotated .slot-label {
+    transform: rotate(-90deg);
+}
+
+.machine-slot.face-left::before,
+.machine-slot.face-right::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 0;
+    height: 0;
+    border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent;
+    transform: translateY(-50%);
+}
+
+.machine-slot.face-left::before {
+    left: -8px;
+    border-right: 10px solid #64748b;
+}
+
+.machine-slot.face-right::before {
+    right: -8px;
+    border-left: 10px solid #64748b;
+}
+
+.slot-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.safety-point {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 2px 2px 4px rgba(163, 177, 198, 0.6);
+}
+
+.safety-point.extinguisher {
+    background: transparent;
+    padding: 2px;
+}
+
+.safety-point.extinguisher .ext-icon {
+    width: 30px;
+    height: 30px;
+}
+
+.legend-icon.extinguisher-icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+}
+
+.safety-point.hose {
+    background: #0ea5e9;
+}
+
+.point-label {
+    position: absolute;
+    top: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 600;
+    color: #1f2937;
+    background: rgba(224, 229, 236, 0.9);
+    padding: 2px 6px;
+    border-radius: 8px;
+    white-space: nowrap;
+    box-shadow: 2px 2px 4px rgba(163, 177, 198, 0.5);
+}
+
 /* Room Boxes */
 #roomsContainer {
     position: absolute;

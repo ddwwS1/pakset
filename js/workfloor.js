@@ -24,13 +24,8 @@ let state = {
 // Current active shift metadata
 state.currentShiftName = null;
 
-// Room layout matching the floor plan image
-const rooms = [
-    { x: 5, y: 40, width: 90 , height: 55 }, // main factory area
-    { x: 20, y: 5, width: 35, height: 35 }, // main factory top left room
-    { x: 55, y: 5, width: 40, height: 35 }, // workshop
-    { x: 5, y: 5, width: 15, height: 35 } // ofset room
-];
+// Old room boxes removed (floor plan is now defined in HTML)
+const rooms = [];
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -960,6 +955,7 @@ function buildFallbackInstances() {
 
 function renderRooms() {
     const container = document.getElementById('roomsContainer');
+    if (!container || rooms.length === 0) return;
     container.innerHTML = '';
     
     rooms.forEach((room, index) => {
@@ -974,7 +970,7 @@ function renderRooms() {
 }
 
 function renderMachines() {
-    const map = document.getElementById('factoryFloorMap');
+    const map = document.getElementById('mapContent') || document.getElementById('factoryFloorMap');
     
     // Remove existing machines
     map.querySelectorAll('.machine-marker').forEach(el => el.remove());
@@ -1059,7 +1055,7 @@ function getStatusIcon(status) {
 }
 
 function renderTags() {
-    const map = document.getElementById('factoryFloorMap');
+    const map = document.getElementById('mapContent') || document.getElementById('factoryFloorMap');
     
     // Remove existing tags
     map.querySelectorAll('.tag-marker').forEach(el => el.remove());
@@ -1067,6 +1063,314 @@ function renderTags() {
     state.tags.forEach(tag => {
         const marker = createTagMarker(tag);
         map.appendChild(marker);
+    });
+}
+
+// ============================================================================
+// MAP ZOOM + PAN (MOUSE, TOUCH, KEYBOARD)
+// ============================================================================
+
+const mapViewState = {
+    scale: 1,
+    x: 0,
+    y: 0,
+    minScale: 0.5,
+    maxScale: 2.8,
+    baseWidth: 1200,
+    baseHeight: 1240,
+    panPadding: 80
+};
+
+let mapPanState = {
+    isPanning: false,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0
+};
+
+const activePointers = new Map();
+let pinchStart = null;
+
+function getMapElements() {
+    const viewport = document.getElementById('mapViewport');
+    const content = document.getElementById('mapContent');
+    const map = document.getElementById('factoryFloorMap');
+    return { map, viewport, content };
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function getPanBounds(scale, rect) {
+    const contentWidth = mapViewState.baseWidth * scale;
+    const contentHeight = mapViewState.baseHeight * scale;
+    const padding = mapViewState.panPadding;
+
+    let minX;
+    let maxX;
+    let minY;
+    let maxY;
+
+    if (contentWidth <= rect.width) {
+        const centeredX = (rect.width - contentWidth) / 2;
+        minX = centeredX - padding;
+        maxX = centeredX + padding;
+    } else {
+        minX = rect.width - contentWidth - padding;
+        maxX = padding;
+    }
+
+    if (contentHeight <= rect.height) {
+        const centeredY = (rect.height - contentHeight) / 2;
+        minY = centeredY - padding;
+        maxY = centeredY + padding;
+    } else {
+        minY = rect.height - contentHeight - padding;
+        maxY = padding;
+    }
+
+    return { minX, maxX, minY, maxY };
+}
+
+function applyMapTransform() {
+    const { viewport, content } = getMapElements();
+    if (!viewport || !content) return;
+    const rect = viewport.getBoundingClientRect();
+    const bounds = getPanBounds(mapViewState.scale, rect);
+    mapViewState.x = clamp(mapViewState.x, bounds.minX, bounds.maxX);
+    mapViewState.y = clamp(mapViewState.y, bounds.minY, bounds.maxY);
+    content.style.transform = `translate(${mapViewState.x}px, ${mapViewState.y}px) scale(${mapViewState.scale})`;
+}
+
+function syncMapBaseSize() {
+    const { content } = getMapElements();
+    if (!content) return;
+    content.style.width = `${mapViewState.baseWidth}px`;
+    content.style.height = `${mapViewState.baseHeight}px`;
+}
+
+function centerMap() {
+    const { viewport } = getMapElements();
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const fitScale = Math.min(rect.width / mapViewState.baseWidth, rect.height / mapViewState.baseHeight);
+    mapViewState.scale = Math.min(mapViewState.maxScale, Math.max(mapViewState.minScale, fitScale));
+    mapViewState.x = (rect.width - mapViewState.baseWidth * mapViewState.scale) / 2;
+    mapViewState.y = (rect.height - mapViewState.baseHeight * mapViewState.scale) / 2;
+    applyMapTransform();
+}
+
+function nudgeMap(dx, dy) {
+    mapViewState.x += dx;
+    mapViewState.y += dy;
+    applyMapTransform();
+}
+
+function zoomAt(clientX, clientY, nextScale) {
+    const { viewport } = getMapElements();
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const scale = clamp(nextScale, mapViewState.minScale, mapViewState.maxScale);
+    const offsetX = clientX - rect.left;
+    const offsetY = clientY - rect.top;
+    const worldX = (offsetX - mapViewState.x) / mapViewState.scale;
+    const worldY = (offsetY - mapViewState.y) / mapViewState.scale;
+
+    mapViewState.scale = scale;
+    mapViewState.x = offsetX - worldX * scale;
+    mapViewState.y = offsetY - worldY * scale;
+    applyMapTransform();
+}
+
+function setScaleBy(delta, clientX, clientY) {
+    const nextScale = mapViewState.scale * delta;
+    zoomAt(clientX, clientY, nextScale);
+}
+
+function shouldIgnoreMapPan(target) {
+    return target && target.closest && target.closest('.machine-marker, .tag-marker, .machine-content, .tag-content');
+}
+
+function handleWheelZoom(e) {
+    const { viewport } = getMapElements();
+    if (!viewport || !viewport.contains(e.target)) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.92 : 1.08;
+    setScaleBy(delta, e.clientX, e.clientY);
+}
+
+function handlePointerDown(e) {
+    const { viewport } = getMapElements();
+    if (!viewport || !viewport.contains(e.target)) return;
+
+    if (shouldIgnoreMapPan(e.target)) return;
+    if (e.button !== undefined && e.button !== 0 && e.button !== 2) return;
+    if (e.button === 2) e.preventDefault();
+
+    viewport.setPointerCapture(e.pointerId);
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.size === 1) {
+        mapPanState.isPanning = true;
+        mapPanState.startX = e.clientX;
+        mapPanState.startY = e.clientY;
+        mapPanState.originX = mapViewState.x;
+        mapPanState.originY = mapViewState.y;
+    } else if (activePointers.size === 2) {
+        const points = Array.from(activePointers.values());
+        const dx = points[0].x - points[1].x;
+        const dy = points[0].y - points[1].y;
+        pinchStart = {
+            distance: Math.hypot(dx, dy),
+            scale: mapViewState.scale,
+            centerX: (points[0].x + points[1].x) / 2,
+            centerY: (points[0].y + points[1].y) / 2
+        };
+        mapPanState.isPanning = false;
+    }
+}
+
+function handlePointerMove(e) {
+    const { viewport } = getMapElements();
+    if (!viewport || !viewport.hasPointerCapture(e.pointerId)) return;
+    if (!activePointers.has(e.pointerId)) return;
+
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.size === 2 && pinchStart) {
+        const points = Array.from(activePointers.values());
+        const dx = points[0].x - points[1].x;
+        const dy = points[0].y - points[1].y;
+        const distance = Math.hypot(dx, dy) || 1;
+        const centerX = (points[0].x + points[1].x) / 2;
+        const centerY = (points[0].y + points[1].y) / 2;
+        const scaleFactor = distance / pinchStart.distance;
+        zoomAt(centerX, centerY, pinchStart.scale * scaleFactor);
+        pinchStart.centerX = centerX;
+        pinchStart.centerY = centerY;
+        return;
+    }
+
+    if (mapPanState.isPanning) {
+        const dx = e.clientX - mapPanState.startX;
+        const dy = e.clientY - mapPanState.startY;
+        mapViewState.x = mapPanState.originX + dx;
+        mapViewState.y = mapPanState.originY + dy;
+        applyMapTransform();
+    }
+}
+
+function handlePointerUp(e) {
+    const { viewport } = getMapElements();
+    if (!viewport) return;
+    if (viewport.hasPointerCapture(e.pointerId)) {
+        viewport.releasePointerCapture(e.pointerId);
+    }
+    activePointers.delete(e.pointerId);
+    if (activePointers.size < 2) {
+        pinchStart = null;
+    }
+    mapPanState.isPanning = false;
+}
+
+function handleMapKeyDown(e) {
+    const { map, viewport } = getMapElements();
+    if (!map || !viewport || document.activeElement !== map) return;
+
+    const step = e.shiftKey ? 120 : 40;
+    let handled = true;
+
+    switch (e.key) {
+        case '+':
+        case '=':
+            zoomAt(viewport.getBoundingClientRect().left + viewport.clientWidth / 2, viewport.getBoundingClientRect().top + viewport.clientHeight / 2, mapViewState.scale * 1.1);
+            break;
+        case '-':
+        case '_':
+            zoomAt(viewport.getBoundingClientRect().left + viewport.clientWidth / 2, viewport.getBoundingClientRect().top + viewport.clientHeight / 2, mapViewState.scale * 0.9);
+            break;
+        case '0':
+            mapViewState.scale = 1;
+            mapViewState.x = 0;
+            mapViewState.y = 0;
+            applyMapTransform();
+            break;
+        case 'ArrowLeft':
+            mapViewState.x += step;
+            applyMapTransform();
+            break;
+        case 'ArrowRight':
+            mapViewState.x -= step;
+            applyMapTransform();
+            break;
+        case 'ArrowUp':
+            mapViewState.y += step;
+            applyMapTransform();
+            break;
+        case 'ArrowDown':
+            mapViewState.y -= step;
+            applyMapTransform();
+            break;
+        case 'w':
+        case 'W':
+            mapViewState.y += step;
+            applyMapTransform();
+            break;
+        case 's':
+        case 'S':
+            mapViewState.y -= step;
+            applyMapTransform();
+            break;
+        case 'a':
+        case 'A':
+            mapViewState.x += step;
+            applyMapTransform();
+            break;
+        case 'd':
+        case 'D':
+            mapViewState.x -= step;
+            applyMapTransform();
+            break;
+        default:
+            handled = false;
+    }
+
+    if (handled) {
+        e.preventDefault();
+    }
+}
+
+function initMapInteractions() {
+    const { viewport, map } = getMapElements();
+    if (!viewport || !map) return;
+
+    syncMapBaseSize();
+    centerMap();
+    viewport.addEventListener('wheel', handleWheelZoom, { passive: false });
+    viewport.addEventListener('pointerdown', handlePointerDown);
+    viewport.addEventListener('pointermove', handlePointerMove);
+    viewport.addEventListener('pointerup', handlePointerUp);
+    viewport.addEventListener('pointercancel', handlePointerUp);
+    viewport.addEventListener('contextmenu', (e) => e.preventDefault());
+    map.addEventListener('keydown', handleMapKeyDown);
+
+    const controlButtons = map.querySelectorAll('.map-control-btn');
+    controlButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const dir = btn.dataset.pan;
+            const step = 60;
+            if (dir === 'up') nudgeMap(0, step);
+            if (dir === 'down') nudgeMap(0, -step);
+            if (dir === 'left') nudgeMap(step, 0);
+            if (dir === 'right') nudgeMap(-step, 0);
+        });
+    });
+
+    window.addEventListener('resize', () => {
+        syncMapBaseSize();
+        centerMap();
     });
 }
 
@@ -1532,6 +1836,7 @@ function handleMouseMove(e) {
     
     const map = document.getElementById('factoryFloorMap');
     const rect = map.getBoundingClientRect();
+    const scale = mapViewState.scale || 1;
     
     const deltaX = e.clientX - dragState.startX;
     const deltaY = e.clientY - dragState.startY;
@@ -1542,8 +1847,8 @@ function handleMouseMove(e) {
         const machine = getMachineById(id);
         if (!machine) return;
         
-        const newX = machine.position.x + (deltaX / rect.width) * 100;
-        const newY = machine.position.y + (deltaY / rect.height) * 100;
+        const newX = machine.position.x + (deltaX / (mapViewState.baseWidth * scale)) * 100;
+        const newY = machine.position.y + (deltaY / (mapViewState.baseHeight * scale)) * 100;
         
         machine.position.x = Math.max(0, Math.min(100, newX));
         machine.position.y = Math.max(0, Math.min(100, newY));
@@ -1554,8 +1859,8 @@ function handleMouseMove(e) {
         const tag = state.tags.find(t => t.id === id);
         if (!tag) return;
         
-        const newX = tag.position.x + (deltaX / rect.width) * 100;
-        const newY = tag.position.y + (deltaY / rect.height) * 100;
+        const newX = tag.position.x + (deltaX / (mapViewState.baseWidth * scale)) * 100;
+        const newY = tag.position.y + (deltaY / (mapViewState.baseHeight * scale)) * 100;
         
         tag.position.x = Math.max(0, Math.min(100, newX));
         tag.position.y = Math.max(0, Math.min(100, newY));
@@ -2091,8 +2396,11 @@ function setupEventListeners() {
         
         const map = document.getElementById('factoryFloorMap');
         const rect = map.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * 100;
-        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        const scale = mapViewState.scale || 1;
+        const localX = (e.clientX - rect.left - mapViewState.x) / scale;
+        const localY = (e.clientY - rect.top - mapViewState.y) / scale;
+        const x = Math.max(0, Math.min(100, (localX / mapViewState.baseWidth) * 100));
+        const y = Math.max(0, Math.min(100, (localY / mapViewState.baseHeight) * 100));
         
         const newTag = {
             id: generateId(),
@@ -2197,6 +2505,7 @@ function init() {
     renderWorkersList();
     updateStats();
     updateShiftProgress();
+    initMapInteractions();
     loadWorkersFromFirestore();
     // Load shift info from Firestore and refresh periodically
     try {

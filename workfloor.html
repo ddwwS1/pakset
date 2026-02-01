@@ -220,9 +220,111 @@
                                 <span id="addTagText">Add Tag</span>
                             </button>
                         </div>
-                        <div class="factory-floor-map" id="factoryFloorMap">
-                            <!-- Room boxes will be added by JS -->
-                            <div id="roomsContainer"></div>
+                        <div class="factory-floor-map" id="factoryFloorMap" tabindex="0" aria-label="Factory floor map (zoomable)">
+                            <div class="map-viewport" id="mapViewport">
+                                <div class="map-content" id="mapContent">
+                                    <!-- Room boxes will be added by JS -->
+                                    <div id="roomsContainer"></div>
+
+                                    <!-- Editable, expandable factory floor plan -->
+                                    <div class="floor-plan" id="floorPlan" aria-label="Factory floor plan">
+                                <!-- Paths based on the injection layout (two central aisles) -->
+                                <svg class="floor-paths" viewBox="0 0 1200 1240" preserveAspectRatio="none" aria-hidden="true">
+                                    <path class="path-forklift" d="M430 20 L430 1220" />
+                                    <path class="path-forklift" d="M770 20 L770 1220" />
+                                    <path class="path-walk" d="M470 20 L470 1220" />
+                                    <path class="path-walk" d="M810 20 L810 1220" />
+                                    <path class="path-forklift" d="M120 620 L1080 620" />
+                                    <path class="path-walk" d="M120 650 L1080 650" />
+                                </svg>
+
+                                <!-- Single room: Injection Area -->
+                                <div class="floor-zone zone-production" style="left:60px; top:0px; width:1080px; height:1240px;">
+                                    <span class="zone-label">
+                                        <span class="zone-icon" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24"><path d="M4 20h16v-6l-4 2v-3l-4 2v-3L4 14z"/></svg>
+                                        </span>
+                                        ENJEKSIYON ALANI
+                                    </span>
+                                </div>
+
+                                <!-- Injection machine placeholders (symmetrical columns) -->
+                                <!-- Left side (10) - closer to left path with larger gaps -->
+                                <div class="machine-slot" style="left:300px; top:670px;"><span class="slot-label">ENJ-L01</span></div>
+                                <div class="machine-slot" style="left:300px; top:725px;"><span class="slot-label">ENJ-L02</span></div>
+                                <div class="machine-slot" style="left:300px; top:780px;"><span class="slot-label">ENJ-L03</span></div>
+                                <div class="machine-slot" style="left:300px; top:835px;"><span class="slot-label">ENJ-L04</span></div>
+                                <div class="machine-slot" style="left:300px; top:890px;"><span class="slot-label">ENJ-L05</span></div>
+                                <div class="machine-slot" style="left:300px; top:945px;"><span class="slot-label">ENJ-L06</span></div>
+                                <div class="machine-slot" style="left:300px; top:1000px;"><span class="slot-label">ENJ-L07</span></div>
+                                <div class="machine-slot" style="left:300px; top:1055px;"><span class="slot-label">ENJ-L08</span></div>
+                                <div class="machine-slot" style="left:300px; top:1110px;"><span class="slot-label">ENJ-L09</span></div>
+                                <div class="machine-slot" style="left:300px; top:1165px;"><span class="slot-label">ENJ-L10</span></div>
+
+                                <!-- Middle row (10) split into two columns, closer to paths -->
+                                <div class="machine-slot rotated" style="left:490px; top:675px;"><span class="slot-label">ENJ-M01</span></div>
+                                <div class="machine-slot rotated" style="left:490px; top:785px;"><span class="slot-label">ENJ-M02</span></div>
+                                <div class="machine-slot rotated" style="left:490px; top:895px;"><span class="slot-label">ENJ-M03</span></div>
+                                <div class="machine-slot rotated" style="left:490px; top:1005px;"><span class="slot-label">ENJ-M04</span></div>
+                                <div class="machine-slot rotated" style="left:490px; top:1115px;"><span class="slot-label">ENJ-M05</span></div>
+                                <div class="machine-slot rotated" style="left:660px; top:675px;"><span class="slot-label">ENJ-M06</span></div>
+                                <div class="machine-slot rotated" style="left:660px; top:785px;"><span class="slot-label">ENJ-M07</span></div>
+                                <div class="machine-slot rotated" style="left:660px; top:895px;"><span class="slot-label">ENJ-M08</span></div>
+                                <div class="machine-slot rotated" style="left:660px; top:1005px;"><span class="slot-label">ENJ-M09</span></div>
+                                <div class="machine-slot rotated" style="left:660px; top:1115px;"><span class="slot-label">ENJ-M10</span></div>
+                                <!-- Right side (7) aligned to top and closer to right path -->
+                                <div class="machine-slot" style="left:860px; top:670px;"><span class="slot-label">ENJ-R01</span></div>
+                                <div class="machine-slot" style="left:860px; top:725px;"><span class="slot-label">ENJ-R02</span></div>
+                                <div class="machine-slot" style="left:860px; top:780px;"><span class="slot-label">ENJ-R03</span></div>
+                                <div class="machine-slot" style="left:860px; top:835px;"><span class="slot-label">ENJ-R04</span></div>
+                                <div class="machine-slot" style="left:860px; top:890px;"><span class="slot-label">ENJ-R05</span></div>
+                                <div class="machine-slot" style="left:860px; top:945px;"><span class="slot-label">ENJ-R06</span></div>
+                                <div class="machine-slot" style="left:860px; top:1000px;"><span class="slot-label">ENJ-R07</span></div>
+
+                                <!-- Fire safety points (aligned to aisles) -->
+                                <div class="safety-point extinguisher" style="left:450px; top:670px;">
+                                    <svg class="ext-icon" viewBox="0 0 200 200" aria-hidden="true">
+                                        <path d="m5.4189,5.423,189.16,0,0,189.15-189.16,0,0-189.15z" fill-rule="evenodd" fill="#a92121" />
+                                        <path d="m50,50,0-12-5,0c-16.763,17.711-15,11-15.935,25.799l-6.388,0.02405c0.323-24.823-1.677-17.823,21.782-38.958l8.541,0.135v-5h16v6c4.5631,0.1005,8.964,0.60059,13,2v9c-3.0449,0.87653-6.8647,1.3052-11,2l-0.208,10.963c10.633,3.325,17.309,7.857,17.208,19.037l-1,111h-54v-111c1.982-15.259,9.445-18.737,17-19z" fill="#ffffff" />
+                                        <path d="M140.84,85.974c-6.68-14.582-5.84-27.467-15.84-33.587,22.31-2.387,22.11,14.733,34.2,34.732,6.1612,10.209,9.2957,12.113,19.261,19.134-10.883,1.1136-23.49,2.7543-37.621-20.278z" fill="#ffffff" />
+                                        <path d="m178.22,148.83c-10.099,8.9642-25.395,7.8304-35.73,0.12286-9.0844-9.1994-13.227-19.521-28.507-22.043,24.088-14.798,35.883,7.0306,42.401,12.638,8.5275,6.854,14.675,6.4324,21.836,9.2819z" fill="#ffffff" />
+                                        <path d="m178.54,116.43,0,22.555c-33.72-6.9045-47.46-29.05-47.786-53.98,18.753,20.208,21.384,26.81,47.786,31.426z" fill="#ffffff" />
+                                        <path d="m178.4,180.29c-28.332,0.93009-42.124-5.7542-47.35-30.64,22.613,15.749,29.453,12.343,46.581,10.089,0.73556,6.7642,0.76879,13.754,0.76879,20.551z" fill="#ffffff" />
+                                        <path d="m177.52,73.365,0.75669,21.609c-20.65-11.003-28.25-32.075-21.28-51.974,7.0102,16.483,7.1352,23.157,20.522,30.365z" fill="#ffffff" />
+                                        <rect height="25" width="40" y="80" x="40" fill="#ab2323" />
+                                    </svg>
+                                    <span class="point-label">Tüp E1</span>
+                                </div>
+                                <div class="safety-point extinguisher" style="left:800px; top:670px;">
+                                    <svg class="ext-icon" viewBox="0 0 200 200" aria-hidden="true">
+                                        <path d="m5.4189,5.423,189.16,0,0,189.15-189.16,0,0-189.15z" fill-rule="evenodd" fill="#a92121" />
+                                        <path d="m50,50,0-12-5,0c-16.763,17.711-15,11-15.935,25.799l-6.388,0.02405c0.323-24.823-1.677-17.823,21.782-38.958l8.541,0.135v-5h16v6c4.5631,0.1005,8.964,0.60059,13,2v9c-3.0449,0.87653-6.8647,1.3052-11,2l-0.208,10.963c10.633,3.325,17.309,7.857,17.208,19.037l-1,111h-54v-111c1.982-15.259,9.445-18.737,17-19z" fill="#ffffff" />
+                                        <path d="M140.84,85.974c-6.68-14.582-5.84-27.467-15.84-33.587,22.31-2.387,22.11,14.733,34.2,34.732,6.1612,10.209,9.2957,12.113,19.261,19.134-10.883,1.1136-23.49,2.7543-37.621-20.278z" fill="#ffffff" />
+                                        <path d="m178.22,148.83c-10.099,8.9642-25.395,7.8304-35.73,0.12286-9.0844-9.1994-13.227-19.521-28.507-22.043,24.088-14.798,35.883,7.0306,42.401,12.638,8.5275,6.854,14.675,6.4324,21.836,9.2819z" fill="#ffffff" />
+                                        <path d="m178.54,116.43,0,22.555c-33.72-6.9045-47.46-29.05-47.786-53.98,18.753,20.208,21.384,26.81,47.786,31.426z" fill="#ffffff" />
+                                        <path d="m178.4,180.29c-28.332,0.93009-42.124-5.7542-47.35-30.64,22.613,15.749,29.453,12.343,46.581,10.089,0.73556,6.7642,0.76879,13.754,0.76879,20.551z" fill="#ffffff" />
+                                        <path d="m177.52,73.365,0.75669,21.609c-20.65-11.003-28.25-32.075-21.28-51.974,7.0102,16.483,7.1352,23.157,20.522,30.365z" fill="#ffffff" />
+                                        <rect height="25" width="40" y="80" x="40" fill="#ab2323" />
+                                    </svg>
+                                    <span class="point-label">Tüp E2</span>
+                                </div>
+                                <div class="safety-point hose" style="left:450px; top:1180px;"><span class="point-label">Hortum H1</span></div>
+                                <div class="safety-point hose" style="left:800px; top:1180px;"><span class="point-label">Hortum H2</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="map-controls" aria-label="Map controls">
+                                <div class="map-controls-row map-controls-center">
+                                    <button class="map-control-btn" data-pan="up" aria-label="Pan up">▲</button>
+                                </div>
+                                <div class="map-controls-row">
+                                    <button class="map-control-btn" data-pan="left" aria-label="Pan left">◀</button>
+                                    <button class="map-control-btn" data-pan="down" aria-label="Pan down">▼</button>
+                                    <button class="map-control-btn" data-pan="right" aria-label="Pan right">▶</button>
+                                </div>
+                            </div>
+
                             <!-- Machines and tags will be added by JS -->
                         </div>
                         <div class="legend">
@@ -241,6 +343,31 @@
                             <div class="legend-item">
                                 <div class="legend-dot" style="background: #ef4444;"></div>
                                 <span>Offline</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #f97316;"></div>
+                                <span>Forklift Path</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #3b82f6;"></div>
+                                <span>Walking Path</span>
+                            </div>
+                            <div class="legend-item">
+                                <svg class="legend-icon extinguisher-icon" viewBox="0 0 200 200" aria-hidden="true">
+                                    <path d="m5.4189,5.423,189.16,0,0,189.15-189.16,0,0-189.15z" fill-rule="evenodd" fill="#a92121" />
+                                    <path d="m50,50,0-12-5,0c-16.763,17.711-15,11-15.935,25.799l-6.388,0.02405c0.323-24.823-1.677-17.823,21.782-38.958l8.541,0.135v-5h16v6c4.5631,0.1005,8.964,0.60059,13,2v9c-3.0449,0.87653-6.8647,1.3052-11,2l-0.208,10.963c10.633,3.325,17.309,7.857,17.208,19.037l-1,111h-54v-111c1.982-15.259,9.445-18.737,17-19z" fill="#ffffff" />
+                                    <path d="M140.84,85.974c-6.68-14.582-5.84-27.467-15.84-33.587,22.31-2.387,22.11,14.733,34.2,34.732,6.1612,10.209,9.2957,12.113,19.261,19.134-10.883,1.1136-23.49,2.7543-37.621-20.278z" fill="#ffffff" />
+                                    <path d="m178.22,148.83c-10.099,8.9642-25.395,7.8304-35.73,0.12286-9.0844-9.1994-13.227-19.521-28.507-22.043,24.088-14.798,35.883,7.0306,42.401,12.638,8.5275,6.854,14.675,6.4324,21.836,9.2819z" fill="#ffffff" />
+                                    <path d="m178.54,116.43,0,22.555c-33.72-6.9045-47.46-29.05-47.786-53.98,18.753,20.208,21.384,26.81,47.786,31.426z" fill="#ffffff" />
+                                    <path d="m178.4,180.29c-28.332,0.93009-42.124-5.7542-47.35-30.64,22.613,15.749,29.453,12.343,46.581,10.089,0.73556,6.7642,0.76879,13.754,0.76879,20.551z" fill="#ffffff" />
+                                    <path d="m177.52,73.365,0.75669,21.609c-20.65-11.003-28.25-32.075-21.28-51.974,7.0102,16.483,7.1352,23.157,20.522,30.365z" fill="#ffffff" />
+                                    <rect height="25" width="40" y="80" x="40" fill="#ab2323" />
+                                </svg>
+                                <span>Fire Extinguisher</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #0ea5e9;"></div>
+                                <span>Fire Hose</span>
                             </div>
                         </div>
                     </div>
