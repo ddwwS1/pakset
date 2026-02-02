@@ -528,6 +528,15 @@ body {
     margin-bottom: 16px;
 }
 
+.factory-floor-map,
+.factory-floor-map * {
+    user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    -webkit-user-drag: none;
+    user-drag: none;
+}
+
 .factory-floor-map:focus-visible {
     outline: 2px solid #3b82f6;
     outline-offset: 2px;
