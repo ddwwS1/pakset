@@ -19,7 +19,13 @@ let state = {
     shiftStartTime: new Date().setHours(8, 0, 0, 0),
     shiftDurationHours: 8,
     workersFilter: 'all',
-    workersSearch: ''
+    workersSearch: '',
+    shiftInitialized: false,
+    shiftOverlayTimer: null,
+    shiftOverlayExitTimer: null,
+    shiftOverlayShiftStart: null,
+    shiftOverlayDemoShown: false,
+    shiftOverlayResizeRaf: null
 };
 // Current active shift metadata
 state.currentShiftName = null;
@@ -170,6 +176,146 @@ function updateStats() {
     document.getElementById('workerCount').textContent = totalWorkers;
     document.getElementById('maintenanceCount').textContent = maintenanceMachines;
     document.getElementById('avgEfficiency').textContent = avgEfficiency + '%';
+}
+
+function triggerShiftTransitionOverlay(shiftName, visibleDurationMs = 10 * 60 * 1000) {
+    const label = String(shiftName || '').trim();
+    if (!label) return;
+    const overlay = document.getElementById('shiftTransitionOverlay');
+    const textEl = document.getElementById('shiftTransitionText');
+    const metaEl = document.getElementById('shiftTransitionMeta');
+    const statsEl = document.getElementById('shiftTransitionStats');
+    const container = document.querySelector('.shift-progress-container');
+    const card = overlay ? overlay.querySelector('.shift-transition-card') : null;
+    if (!overlay || !textEl) return;
+    textEl.textContent = label;
+    if (metaEl) {
+        const s = state.shiftStartTime ? new Date(state.shiftStartTime) : null;
+        const e = state.shiftEndTime ? new Date(state.shiftEndTime) : null;
+        const pad = (n) => n.toString().padStart(2, '0');
+        const fmt = dt => `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        const timeRange = (s && e) ? `${fmt(s)} — ${fmt(e)}` : 'Schedule synced';
+        metaEl.textContent = `Shift window · ${timeRange}`;
+    }
+    if (statsEl) {
+        const totalWorkers = getCurrentShiftWorkers().length;
+        const runningMachines = state.machines.filter(m => m.status === 'running').length;
+        const regularHours = Math.round((state.shiftRegularMs || 0) / (1000 * 60 * 60));
+        const overtimeHours = Math.round((state.shiftOvertimeMs || 0) / (1000 * 60 * 60));
+        const totalHours = Math.round((state.shiftTotalMs || 0) / (1000 * 60 * 60));
+        statsEl.innerHTML = '';
+        const blocks = [
+            { label: 'Workers', value: totalWorkers },
+            { label: 'Running', value: runningMachines },
+            { label: 'Duration', value: `${totalHours || '—'}h` },
+            { label: 'Overtime', value: `${overtimeHours || 0}h` },
+            { label: 'Regular', value: `${regularHours || 0}h` }
+        ];
+        blocks.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'shift-transition-stat';
+            const span = document.createElement('span');
+            span.textContent = item.label;
+            const strong = document.createElement('strong');
+            strong.textContent = item.value;
+            div.appendChild(span);
+            div.appendChild(strong);
+            statsEl.appendChild(div);
+        });
+    }
+    overlay.classList.remove('entering', 'visible', 'exiting');
+    if (state.shiftOverlayTimer) {
+        clearTimeout(state.shiftOverlayTimer);
+    }
+    if (state.shiftOverlayExitTimer) {
+        clearTimeout(state.shiftOverlayExitTimer);
+    }
+    void overlay.offsetWidth;
+    overlay.classList.add('entering');
+    if (container && card) {
+        const extraPadding = 56;
+        const baseHeight = container.dataset.baseHeight
+            ? Number(container.dataset.baseHeight)
+            : container.getBoundingClientRect().height;
+        if (!container.dataset.baseHeight) {
+            container.dataset.baseHeight = String(Math.round(baseHeight));
+        }
+        const targetHeight = Math.max(baseHeight, card.offsetHeight + extraPadding);
+        animateContainerHeight(container, targetHeight);
+    }
+    state.shiftOverlayTimer = setTimeout(() => {
+        overlay.classList.remove('entering');
+        overlay.classList.add('visible');
+    }, 900);
+
+    state.shiftOverlayExitTimer = setTimeout(() => {
+        overlay.classList.remove('visible');
+        overlay.classList.add('exiting');
+        state.shiftOverlayTimer = setTimeout(() => {
+            overlay.classList.remove('exiting');
+            if (container) {
+                const baseHeight = container.dataset.baseHeight
+                    ? Number(container.dataset.baseHeight)
+                    : container.getBoundingClientRect().height;
+                animateContainerHeight(container, baseHeight, 700, () => {
+                    container.style.height = '';
+                    container.style.minHeight = '';
+                });
+            }
+        }, 900);
+    }, Math.max(0, visibleDurationMs));
+}
+
+function syncShiftOverlayForWindow() {
+    const overlay = document.getElementById('shiftTransitionOverlay');
+    if (!overlay) return;
+    if (!state.currentShiftName || !state.shiftStartTime) {
+        overlay.classList.remove('entering', 'visible', 'exiting');
+        return;
+    }
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000;
+    const elapsed = now - state.shiftStartTime;
+    if (elapsed < 0 || elapsed > windowMs) {
+        overlay.classList.remove('entering', 'visible', 'exiting');
+        return;
+    }
+    if (state.shiftOverlayShiftStart !== state.shiftStartTime) {
+        state.shiftOverlayShiftStart = state.shiftStartTime;
+        const remaining = windowMs - elapsed;
+        triggerShiftTransitionOverlay(state.currentShiftName, remaining);
+    }
+}
+
+function isShiftOverlayActive() {
+    const overlay = document.getElementById('shiftTransitionOverlay');
+    if (!overlay) return false;
+    return overlay.classList.contains('entering') || overlay.classList.contains('visible') || overlay.classList.contains('exiting');
+}
+
+function animateContainerHeight(container, targetHeight, duration = 700, onDone) {
+    if (!container) return;
+    if (state.shiftOverlayResizeRaf) {
+        cancelAnimationFrame(state.shiftOverlayResizeRaf);
+        state.shiftOverlayResizeRaf = null;
+    }
+    const startHeight = container.getBoundingClientRect().height;
+    const delta = targetHeight - startHeight;
+    const startTime = performance.now();
+    const step = (now) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const current = startHeight + delta * progress;
+        container.style.height = `${Math.round(current)}px`;
+        container.style.minHeight = `${Math.round(current)}px`;
+        if (progress < 1) {
+            state.shiftOverlayResizeRaf = requestAnimationFrame(step);
+        } else {
+            state.shiftOverlayResizeRaf = null;
+            if (typeof onDone === 'function') onDone();
+        }
+    };
+    state.shiftOverlayResizeRaf = requestAnimationFrame(step);
 }
 
 function updateShiftProgress() {
@@ -863,6 +1009,7 @@ function renderScheduleTable(docs) {
 
 async function loadCurrentShiftFromFirestore() {
     const now = new Date();
+    const prevShiftName = state.currentShiftName;
     const today = now.toISOString().split('T')[0];
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -900,6 +1047,15 @@ async function loadCurrentShiftFromFirestore() {
         state.shiftOvertimeMs = 0;
         state.shiftTotalMs = 0;
     }
+
+    if (state.shiftInitialized) {
+        if (state.currentShiftName && state.currentShiftName !== prevShiftName) {
+            state.shiftOverlayShiftStart = null;
+        }
+    } else {
+        state.shiftInitialized = true;
+    }
+    syncShiftOverlayForWindow();
     // Update debug panel with fetch info and selected instance
     const debugEl = document.getElementById('shiftDebug');
     const debugPre = document.getElementById('shiftDebugPre');
@@ -2542,6 +2698,15 @@ function init() {
     
     // Update shift progress every second (real-time countdown)
     setInterval(updateShiftProgress, 1000);
+
+    // Demo overlay once after load so it is visible for testing
+    setTimeout(() => {
+        if (state.shiftOverlayDemoShown) return;
+        if (isShiftOverlayActive()) return;
+        state.shiftOverlayDemoShown = true;
+        const demoName = state.currentShiftName || 'Shift Starting';
+        triggerShiftTransitionOverlay(demoName, 12 * 1000);
+    }, 1800);
 }
 
 // Start the app

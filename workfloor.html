@@ -28,6 +28,13 @@
 
             <!-- Shift Progress Bar -->
             <div class="shift-progress-container">
+                <div class="shift-transition-overlay" id="shiftTransitionOverlay" aria-live="polite" aria-atomic="true">
+                    <div class="shift-transition-card" role="status">
+                        <div class="shift-transition-text" id="shiftTransitionText"></div>
+                        <div class="shift-transition-meta" id="shiftTransitionMeta"></div>
+                        <div class="shift-transition-stats" id="shiftTransitionStats"></div>
+                    </div>
+                </div>
                 <div class="shift-info">
                     <div class="shift-left">
                         <span class="shift-label">Current Shift Progress</span>
@@ -248,23 +255,19 @@
                                     </span>
                                 </div>
 
-                                <!-- Fixed square columns (edit positions here) -->
-                                <div class="floor-column" style="left:611px; top:1165px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:1090px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:1015px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:940px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:865px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:790px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:715px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:640px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:565px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:490px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:415px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:340px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:265px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:190px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:115px; height:25px;"></div>
-                                <div class="floor-column" style="left:611px; top:40px; height:25px;"></div>
+                                <!-- Right-side room -->
+                                <div class="floor-zone zone-production" style="left:1140px; top:110px; width:250px; height:400px;">
+                                    <span class="zone-label">
+                                        <span class="zone-icon" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24"><path d="M3 7h18v4H3zM5 11v6h14v-6"/></svg>
+                                        </span>
+                                        SMALL ROOM
+                                    </span>
+                                </div>
+
+                                <!-- Shared wall erase strip (only at overlap) -->
+                                <div class="zone-seam-erase" style="left:1129px; top:120px; height:380px;"></div>
+
 
                                 <!-- Injection machine placeholders (symmetrical columns) -->
                                 <!-- Left side (10) - closer to left path with larger gaps -->
