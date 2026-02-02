@@ -999,11 +999,7 @@ function createMachineMarker(machine) {
     const icon = document.createElement('div');
     icon.className = 'machine-status-icon';
     if (machine.icon) {
-        const img = document.createElement('img');
-        img.className = 'machine-brand-icon';
-        img.src = machine.icon;
-        img.alt = machine.brand || machine.type || 'machine';
-        icon.appendChild(img);
+        icon.innerHTML = getBrandIconSvg(machine.brand || machine.type || 'M');
     } else {
         icon.innerHTML = getStatusIcon(machine.status);
         icon.style.color = getStatusColor(machine.status);
@@ -1042,6 +1038,19 @@ function createMachineMarker(machine) {
     marker.addEventListener('click', handleMachineClick);
     
     return marker;
+}
+
+function getBrandIconSvg(label) {
+    const text = String(label || 'M').trim().toUpperCase().slice(0, 3);
+    return `
+        <svg class="machine-brand-icon" viewBox="0 0 32 32" aria-hidden="true">
+            <rect x="3" y="5" width="26" height="22" rx="5" fill="currentColor" opacity="0.12"></rect>
+            <rect x="6" y="9" width="20" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <circle cx="10" cy="16" r="2" fill="currentColor"></circle>
+            <path d="M14 20h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+            <text x="20" y="15" text-anchor="middle" dominant-baseline="middle" font-size="7" font-weight="700" fill="currentColor" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">${text}</text>
+        </svg>
+    `;
 }
 
 function getStatusIcon(status) {
@@ -1141,7 +1150,7 @@ function applyMapTransform() {
     const bounds = getPanBounds(mapViewState.scale, rect);
     mapViewState.x = clamp(mapViewState.x, bounds.minX, bounds.maxX);
     mapViewState.y = clamp(mapViewState.y, bounds.minY, bounds.maxY);
-    content.style.transform = `translate(${mapViewState.x}px, ${mapViewState.y}px) scale(${mapViewState.scale})`;
+    content.style.transform = `translate3d(${mapViewState.x}px, ${mapViewState.y}px, 0) scale(${mapViewState.scale})`;
 }
 
 function syncMapBaseSize() {

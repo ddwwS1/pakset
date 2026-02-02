@@ -395,7 +395,13 @@ body {
     position: absolute;
     inset: 0;
     transform-origin: 0 0;
-    will-change: transform;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+}
+
+.map-content svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
 }
 
 .map-controls {
@@ -457,22 +463,24 @@ body {
 .path-forklift {
     fill: none;
     stroke: #f97316;
-    stroke-width: 12;
-    stroke-linecap: round;
+    stroke-width: 14;
+    stroke-linecap: butt;
     stroke-linejoin: round;
-    stroke-dasharray: 14 10;
+    stroke-dasharray: 18 10;
     opacity: 0.85;
 }
 
 .path-walk {
     fill: none;
     stroke: #3b82f6;
-    stroke-width: 8;
-    stroke-linecap: round;
+    stroke-width: 10;
+    stroke-linecap: butt;
     stroke-linejoin: round;
-    stroke-dasharray: 10 8;
+    stroke-dasharray: 14 8;
     opacity: 0.9;
 }
+
+
 
 .floor-zone {
     position: absolute;
@@ -569,6 +577,25 @@ body {
     align-items: center;
     justify-content: center;
 }
+
+.floor-column {
+    position: absolute;
+    width: 25px;
+    height: 25px;
+    border-radius: 6px;
+    background: #94a3b8;
+    box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.5), 2px 2px 4px rgba(148, 163, 184, 0.6);
+    opacity: 0.9;
+}
+
+.floor-column::after {
+    content: '';
+    position: absolute;
+    inset: 6px 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.22);
+}
+
 
 .machine-slot.rotated {
     transform: rotate(90deg);
@@ -711,6 +738,12 @@ body {
 .machine-status-icon {
     width: 20px;
     height: 20px;
+}
+
+.machine-brand-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
 }
 
 .machine-name {
