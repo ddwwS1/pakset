@@ -624,8 +624,8 @@ body {
     stroke-width: 14;
     stroke-linecap: butt;
     stroke-linejoin: round;
-    stroke-dasharray: 18 10;
-    opacity: 0.85;
+    stroke-dasharray: 5 10;
+
 }
 
 .path-walk {
@@ -635,7 +635,6 @@ body {
     stroke-linecap: butt;
     stroke-linejoin: round;
     stroke-dasharray: 14 8;
-    opacity: 0.9;
 }
 
 
@@ -747,16 +746,22 @@ body {
     fill: currentColor;
 }
 
-.machine-slot {
+.machine-card {
     position: absolute;
-    width: 90px;
-    height: 56px;
-    border-radius: 10px;
-    border: 2px dashed #94a3b8;
-    background: rgba(226, 232, 240, 0.45);
+    width: 96px;
+    height: 45px;
+    border-radius: 12px;
+    border: 1px solid #cbd5e1;
+    background: #e0e5ec;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 4px;
+    padding: 6px 8px;
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: 4px 4px 8px rgba(163, 177, 198, 0.6), -3px -3px 8px rgba(255, 255, 255, 0.9);
 }
 
 .floor-column {
@@ -778,17 +783,33 @@ body {
 }
 
 
-.machine-slot.rotated {
-    transform: rotate(90deg);
-    transform-origin: center;
+.machine-card.vertical {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 96px;
+    width: 60px;
+    transform: translateX(18px);
 }
 
-.machine-slot.rotated .slot-label {
-    transform: rotate(-90deg);
+.machine-card.right-row {
+    transform: translateY(90px);
 }
 
-.machine-slot.face-left::before,
-.machine-slot.face-right::before {
+.machine-card.vertical .machine-card-image {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+}
+
+.machine-card.vertical .machine-card-label {
+    text-align: center;
+}
+
+.machine-card.face-left::before,
+.machine-card.face-right::before {
     content: '';
     position: absolute;
     top: 50%;
@@ -799,20 +820,29 @@ body {
     transform: translateY(-50%);
 }
 
-.machine-slot.face-left::before {
+.machine-card.face-left::before {
     left: -8px;
     border-right: 10px solid #64748b;
 }
 
-.machine-slot.face-right::before {
+.machine-card.face-right::before {
     right: -8px;
     border-left: 10px solid #64748b;
 }
 
-.slot-label {
-    font-size: 11px;
+.machine-card-image {
+    width: 58px;
+    height: 28px;
+    object-fit: contain;
+    display: block;
+}
+
+.machine-card-label {
+    font-size: 10px;
     font-weight: 600;
     color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .safety-point {
@@ -919,6 +949,13 @@ body {
 .machine-status-icon {
     width: 20px;
     height: 20px;
+}
+
+.machine-status-image {
+    width: 42px;
+    height: 22px;
+    object-fit: contain;
+    display: block;
 }
 
 .machine-brand-icon {

@@ -1155,7 +1155,9 @@ function createMachineMarker(machine) {
     const icon = document.createElement('div');
     icon.className = 'machine-status-icon';
     if (machine.icon) {
-        icon.innerHTML = getBrandIconSvg(machine.brand || machine.type || 'M');
+        icon.innerHTML = `
+            <img class="machine-status-image" src="${machine.icon}" alt="${machine.name} card">
+        `;
     } else {
         icon.innerHTML = getStatusIcon(machine.status);
         icon.style.color = getStatusColor(machine.status);
@@ -2498,7 +2500,9 @@ function setupEventListeners() {
             return;
         }
         
-        const iconPath = `assets/icons/machine-icons/${brand}-icon-e.png`;
+        const iconPath = brand === 'bmb'
+            ? 'assets/icons/logos/machine-brands/BMB_spa_logo.svg'
+            : 'assets/icons/logos/machine-brands/JSW_Group_logo.svg';
 
         const newMachine = {
             id: generateId(),
@@ -2538,6 +2542,57 @@ function setupEventListeners() {
         addMachineBtn.style.display = 'flex';
         addMachineForm.style.display = 'none';
         addMachineCard.classList.remove('pressed');
+    });
+
+    // Activate machine cards placed on the floor
+    function activateMachineCard(card) {
+        if (!card || card.dataset.activated === 'true') return;
+        const label = card.querySelector('.machine-card-label');
+        const name = (label && label.textContent ? label.textContent.trim() : '') || 'Machine';
+        const brand = card.classList.contains('bmb') ? 'bmb' : 'jsw';
+        const type = brand === 'bmb' ? 'BMB-H1' : 'JSW-1';
+        const iconPath = brand === 'bmb'
+            ? 'assets/icons/logos/machine-brands/BMB_spa_logo.svg'
+            : 'assets/icons/logos/machine-brands/JSW_Group_logo.svg';
+
+        const map = document.getElementById('factoryFloorMap');
+        const rect = map.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        const scale = mapViewState.scale || 1;
+        const centerX = cardRect.left + (cardRect.width / 2);
+        const centerY = cardRect.top + (cardRect.height / 2);
+        const localX = (centerX - rect.left - mapViewState.x) / scale;
+        const localY = (centerY - rect.top - mapViewState.y) / scale;
+        const x = Math.max(0, Math.min(100, (localX / mapViewState.baseWidth) * 100));
+        const y = Math.max(0, Math.min(100, (localY / mapViewState.baseHeight) * 100));
+
+        const newMachine = {
+            id: generateId(),
+            name: name,
+            type: type,
+            brand: brand,
+            icon: iconPath,
+            status: 'idle',
+            position: { x, y },
+            workers: [],
+            efficiency: 0,
+            lastMaintenance: new Date().toISOString().split('T')[0],
+            todos: []
+        };
+
+        state.machines.push(newMachine);
+        card.dataset.activated = 'true';
+        card.remove();
+        renderMachines();
+        renderMachinesList();
+        updateStats();
+    }
+
+    document.querySelectorAll('.machine-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            e.stopPropagation();
+            activateMachineCard(card);
+        });
     });
     
     // Add tag
