@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getFirestore, doc, getDoc, collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, collection, query, where, orderBy, getDocs, setDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-storage.js";
 import { getFunctions } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-functions.js";
@@ -87,4 +87,4 @@ async function fetchAllWorkerSchedules() {
   }
 }
 
-export { db, getAuth, getStorage, getFunctions, doc, getDoc, collection, query, where, orderBy, getDocs, fetchSchedulesByDateRange, fetchWorkerSchedulesByWeekStarts, fetchAllWorkers, fetchAllWorkerSchedules };
+export { db, getAuth, getStorage, getFunctions, doc, getDoc, collection, query, where, orderBy, getDocs, setDoc, updateDoc, deleteField, fetchSchedulesByDateRange, fetchWorkerSchedulesByWeekStarts, fetchAllWorkers, fetchAllWorkerSchedules };

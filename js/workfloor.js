@@ -20,6 +20,8 @@ let state = {
     shiftDurationHours: 8,
     workersFilter: 'all',
     workersSearch: '',
+    machinesFilter: 'all',
+    machinesSearch: '',
     shiftInitialized: false,
     shiftOverlayTimer: null,
     shiftOverlayExitTimer: null,
@@ -218,7 +220,6 @@ function triggerShiftTransitionOverlay(shiftName, visibleDurationMs = 10 * 60 * 
             span.textContent = item.label;
             const strong = document.createElement('strong');
             strong.textContent = item.value;
-            div.appendChild(span);
             div.appendChild(strong);
             statsEl.appendChild(div);
         });
@@ -682,22 +683,33 @@ function buildWorkerScheduleDayMap(workers, dateKeys) {
     });
 
     (workers || []).forEach(w => {
-        const data = w.data || {};
-        const workerId = w.id;
+        const data = w.data || w._data || {};
+        const workerId = w.id || data.workerId;
         const workerName = data.name || workerId;
-        const shift = (data.currentShift || '').toLowerCase();
-        const status = data.status || '';
+        const initialShift = data.initialShift || data.currentShift || 'morning';
+        const rotationEnabled = data.rotationEnabled !== false;
+        const manualOverrides = data.manualOverrides || {};
 
         Object.keys(dayMap).forEach(dateStr => {
+            const dayDate = parseLocalDate(dateStr);
+            const weekStart = getWeekStartSunday(dayDate);
+            let assignedShift = initialShift;
+            if (rotationEnabled) {
+                assignedShift = computeAssignedShift(initialShift, weekStart);
+            }
+            const baseDay = buildDayEntry(dateStr, assignedShift);
+            const override = manualOverrides[dateStr];
+            const merged = mergeOverride(baseDay, override);
+
             dayMap[dateStr].push({
                 workerId,
                 workerName,
-                shift,
-                status,
-                start: '',
-                end: '',
-                duration: undefined,
-                overtime: undefined
+                shift: merged.shift || assignedShift,
+                status: merged.status || '',
+                start: merged.start || '',
+                end: merged.end || '',
+                duration: merged.duration,
+                overtime: merged.overtime
             });
         });
     });
@@ -858,10 +870,10 @@ function renderWorkerScheduleTable(workers, startDateStr, endDateStr, scheduleDo
                         const scheduleMeta = (scheduleMetaMap[dateStr] && scheduleMetaMap[dateStr][(entry.shift || '').toLowerCase()]) || null;
                         if (entry.status && entry.status.toLowerCase() === 'off') {
                             detailsText = 'Off';
+                        } else if (entry.start && entry.end) {
+                            detailsText = `${entry.start} — ${entry.end}`;
                         } else if (scheduleMeta && scheduleMeta.start && scheduleMeta.end) {
                             detailsText = `${scheduleMeta.start} — ${scheduleMeta.end}`;
-                        } else {
-                            detailsText = '';
                         }
 
                         timeSpan.textContent = detailsText;
@@ -1137,6 +1149,28 @@ function renderMachines() {
     });
 }
 
+function createStoplight(status) {
+    const normalized = String(status || '').toLowerCase();
+    const isStopped = normalized === 'stopped' || normalized === 'maintenance';
+    const light = document.createElement('div');
+    light.className = 'status-stoplight';
+    if (normalized === 'offline') {
+        light.classList.add('offline');
+    }
+
+    const red = document.createElement('span');
+    red.className = 'status-dot' + ((isStopped || normalized === 'offline') ? ' active stopped' : '');
+    const yellow = document.createElement('span');
+    yellow.className = 'status-dot' + (normalized === 'idle' ? ' active idle' : '');
+    const green = document.createElement('span');
+    green.className = 'status-dot' + (normalized === 'running' ? ' active running' : '');
+
+    light.appendChild(red);
+    light.appendChild(yellow);
+    light.appendChild(green);
+    return light;
+}
+
 function createMachineMarker(machine) {
     const marker = document.createElement('div');
     marker.className = 'machine-marker';
@@ -1147,6 +1181,18 @@ function createMachineMarker(machine) {
     
     const content = document.createElement('div');
     content.className = 'machine-content';
+    if (String(machine.status || '').toLowerCase() === 'offline') {
+        content.classList.add('is-offline');
+    }
+    if (machine.cardSize && machine.cardSize.width && machine.cardSize.height) {
+        content.classList.add('machine-content-card');
+        content.style.width = `${machine.cardSize.width}px`;
+        content.style.height = `${machine.cardSize.height}px`;
+    }
+
+    const stoplight = createStoplight(machine.status);
+    stoplight.classList.add('machine-status-stoplight');
+    content.appendChild(stoplight);
     
     const info = document.createElement('div');
     info.className = 'machine-info';
@@ -1573,17 +1619,198 @@ function createTagMarker(tag) {
 
 function renderMachinesList() {
     const container = document.getElementById('machinesList');
+    const summary = document.getElementById('machineBrandSummary');
+    const mapSummary = document.getElementById('machineMapSummary');
     container.innerHTML = '';
+
+    if (summary) {
+        summary.innerHTML = '';
+        const brandMap = {};
+        state.machines.forEach(machine => {
+            const brandKey = (machine.brand || 'unknown').toLowerCase();
+            if (!brandMap[brandKey]) {
+                brandMap[brandKey] = {
+                    count: 0,
+                    icon: machine.icon || null,
+                    label: brandKey.toUpperCase()
+                };
+            }
+            brandMap[brandKey].count += 1;
+            if (!brandMap[brandKey].icon && machine.icon) {
+                brandMap[brandKey].icon = machine.icon;
+            }
+        });
+
+        Object.keys(brandMap).sort().forEach(key => {
+            const data = brandMap[key];
+            const chip = document.createElement('div');
+            chip.className = 'brand-chip';
+            if (data.icon) {
+                const img = document.createElement('img');
+                img.src = data.icon;
+                img.alt = `${data.label} logo`;
+                chip.appendChild(img);
+            }
+            const text = document.createElement('span');
+            text.textContent = `${data.label} · ${data.count}`;
+            chip.appendChild(text);
+            summary.appendChild(chip);
+        });
+    }
+
+    if (mapSummary) {
+        mapSummary.innerHTML = '';
+        if (!state.machines || state.machines.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'machine-map-chip';
+            empty.textContent = 'No machines on map.';
+            mapSummary.appendChild(empty);
+        } else {
+            state.machines.forEach(machine => {
+                const chip = document.createElement('div');
+                chip.className = 'machine-map-chip';
+                chip.addEventListener('click', () => openMachineMenu(machine.id));
+                if (machine.icon) {
+                    const img = document.createElement('img');
+                    img.src = machine.icon;
+                    img.alt = `${machine.brand || 'machine'} logo`;
+                    chip.appendChild(img);
+                }
+                const text = document.createElement('span');
+                text.textContent = machine.name;
+                chip.appendChild(text);
+                mapSummary.appendChild(chip);
+            });
+        }
+    }
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'machines-toolbar';
+
+    const info = document.createElement('div');
+    info.className = 'machines-toolbar-info';
+    info.textContent = `${state.machines.length} machine${state.machines.length !== 1 ? 's' : ''}`;
+
+    const controls = document.createElement('div');
+    controls.className = 'machines-toolbar-controls';
+
+    const filters = document.createElement('div');
+    filters.className = 'machines-filters';
+    ['all', 'running', 'idle', 'maintenance', 'offline'].forEach(key => {
+        const btn = document.createElement('button');
+        btn.className = 'filter-chip' + (state.machinesFilter === key ? ' active' : '');
+        btn.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+        btn.addEventListener('click', () => {
+            state.machinesFilter = key;
+            renderMachinesList();
+        });
+        filters.appendChild(btn);
+    });
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'machines-search';
+    searchWrap.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search machines';
+    searchInput.value = state.machinesSearch || '';
+    searchInput.addEventListener('input', (e) => {
+        state.machinesSearch = e.target.value;
+        renderMachinesList();
+    });
+    searchWrap.appendChild(searchInput);
+
+    controls.appendChild(filters);
+    controls.appendChild(searchWrap);
+    toolbar.appendChild(info);
+    toolbar.appendChild(controls);
+    container.appendChild(toolbar);
+
+    let filteredMachines = [...state.machines];
+    if (state.machinesFilter !== 'all') {
+        filteredMachines = filteredMachines.filter(m => (m.status || '').toLowerCase() === state.machinesFilter);
+    }
+    const query = (state.machinesSearch || '').trim().toLowerCase();
+    if (query) {
+        filteredMachines = filteredMachines.filter(m => {
+            const hay = `${m.name || ''} ${m.type || ''} ${m.brand || ''}`.toLowerCase();
+            return hay.includes(query);
+        });
+    }
+
+    if (!filteredMachines || filteredMachines.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = query || state.machinesFilter !== 'all'
+            ? 'No machines match the current filters.'
+            : 'No machines available.';
+        container.appendChild(empty);
+        return;
+    }
     
-    state.machines.forEach(machine => {
+    filteredMachines.forEach(machine => {
         const item = createMachineListItem(machine);
         container.appendChild(item);
     });
 }
 
+// Sync static machine cards into state
+function activateMachineCard(card) {
+    if (!card) return;
+    if (card.dataset.machineId) return;
+    const label = card.querySelector('.machine-card-label');
+    const name = (label && label.textContent ? label.textContent.trim() : '') || 'Machine';
+    const brand = card.classList.contains('bmb') ? 'bmb' : 'jsw';
+    const type = brand === 'bmb' ? 'BMB-H1' : 'JSW-1';
+    const iconPath = brand === 'bmb'
+        ? 'assets/icons/logos/machine-brands/BMB_spa_logo.svg'
+        : 'assets/icons/logos/machine-brands/JSW_Group_logo.svg';
+
+    const map = document.getElementById('factoryFloorMap');
+    if (!map) return;
+    const rect = map.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const scale = mapViewState.scale || 1;
+    const centerX = cardRect.left + (cardRect.width / 2);
+    const centerY = cardRect.top + (cardRect.height / 2);
+    const localX = (centerX - rect.left - mapViewState.x) / scale;
+    const localY = (centerY - rect.top - mapViewState.y) / scale;
+    const x = Math.max(0, Math.min(100, (localX / mapViewState.baseWidth) * 100));
+    const y = Math.max(0, Math.min(100, (localY / mapViewState.baseHeight) * 100));
+
+    const newMachine = {
+        id: generateId(),
+        name: name,
+        type: type,
+        brand: brand,
+        icon: iconPath,
+        status: 'idle',
+        mould: 'Not set',
+        cardSize: { width: Math.round(cardRect.width), height: Math.round(cardRect.height) },
+        position: { x, y },
+        workers: [],
+        efficiency: 0,
+        lastMaintenance: new Date().toISOString().split('T')[0],
+        todos: []
+    };
+
+    state.machines.push(newMachine);
+    card.dataset.machineId = newMachine.id;
+}
+
+function syncMachineCardsToState() {
+    document.querySelectorAll('.machine-card').forEach(card => activateMachineCard(card));
+    renderMachines();
+    renderMachinesList();
+    updateStats();
+}
+
 function createMachineListItem(machine) {
     const item = document.createElement('div');
     item.className = 'machine-list-item';
+    if (String(machine.status || '').toLowerCase() === 'offline') {
+        item.classList.add('is-offline');
+    }
     
     // Header
     const header = document.createElement('div');
@@ -1591,6 +1818,13 @@ function createMachineListItem(machine) {
     
     const title = document.createElement('div');
     title.className = 'machine-list-title';
+    if (machine.icon) {
+        const brandIcon = document.createElement('img');
+        brandIcon.className = 'machine-brand-icon';
+        brandIcon.src = machine.icon;
+        brandIcon.alt = `${machine.brand || 'machine'} logo`;
+        title.appendChild(brandIcon);
+    }
     
     const status = document.createElement('div');
     status.className = 'machine-list-status';
@@ -1602,12 +1836,15 @@ function createMachineListItem(machine) {
     
     title.appendChild(status);
     title.appendChild(name);
+
+    const stoplight = createStoplight(machine.status);
     
     const expandIcon = document.createElement('div');
     expandIcon.className = 'expand-icon';
     expandIcon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
     
     header.appendChild(title);
+    header.appendChild(stoplight);
     header.appendChild(expandIcon);
     
     // Details
@@ -1635,6 +1872,7 @@ function createMachineListItem(machine) {
     header.addEventListener('click', () => {
         details.classList.toggle('expanded');
         expandIcon.classList.toggle('expanded');
+        openMachineMenu(machine.id);
     });
     
     return item;
@@ -2087,6 +2325,25 @@ function openMachineMenu(machineId) {
     const menu = document.createElement('div');
     menu.className = 'machine-menu';
     menu.dataset.machineId = machineId;
+
+    const detailsSection = document.createElement('div');
+    detailsSection.className = 'menu-section';
+
+    const detailsLabel = document.createElement('label');
+    detailsLabel.className = 'menu-label';
+    detailsLabel.textContent = 'Details';
+
+    const statusText = machine.status ? machine.status.charAt(0).toUpperCase() + machine.status.slice(1) : 'Unknown';
+    const mouldText = machine.mould || 'Not set';
+    const assignedWorkers = state.workers
+        .filter(w => w.assignedMachine === machineId)
+        .map(w => w.name || w.id)
+        .join(', ') || 'Unassigned';
+
+    detailsSection.appendChild(detailsLabel);
+    detailsSection.appendChild(createDetailRow('Status', statusText));
+    detailsSection.appendChild(createDetailRow('Mould', mouldText));
+    detailsSection.appendChild(createDetailRow('Assigned', assignedWorkers));
     
     // Status section
     const statusSection = document.createElement('div');
@@ -2175,6 +2432,7 @@ function openMachineMenu(machineId) {
     
     deleteSection.appendChild(deleteBtn);
     
+    menu.appendChild(detailsSection);
     menu.appendChild(statusSection);
     menu.appendChild(efficiencySection);
     menu.appendChild(workerSection);
@@ -2511,6 +2769,8 @@ function setupEventListeners() {
             brand: brand,
             icon: iconPath,
             status: 'idle',
+            mould: 'Not set',
+            cardSize: { width: 96, height: 45 },
             position: { x: 50, y: 50 },
             workers: [],
             efficiency: 0,
@@ -2544,54 +2804,17 @@ function setupEventListeners() {
         addMachineCard.classList.remove('pressed');
     });
 
-    // Activate machine cards placed on the floor
-    function activateMachineCard(card) {
-        if (!card || card.dataset.activated === 'true') return;
-        const label = card.querySelector('.machine-card-label');
-        const name = (label && label.textContent ? label.textContent.trim() : '') || 'Machine';
-        const brand = card.classList.contains('bmb') ? 'bmb' : 'jsw';
-        const type = brand === 'bmb' ? 'BMB-H1' : 'JSW-1';
-        const iconPath = brand === 'bmb'
-            ? 'assets/icons/logos/machine-brands/BMB_spa_logo.svg'
-            : 'assets/icons/logos/machine-brands/JSW_Group_logo.svg';
-
-        const map = document.getElementById('factoryFloorMap');
-        const rect = map.getBoundingClientRect();
-        const cardRect = card.getBoundingClientRect();
-        const scale = mapViewState.scale || 1;
-        const centerX = cardRect.left + (cardRect.width / 2);
-        const centerY = cardRect.top + (cardRect.height / 2);
-        const localX = (centerX - rect.left - mapViewState.x) / scale;
-        const localY = (centerY - rect.top - mapViewState.y) / scale;
-        const x = Math.max(0, Math.min(100, (localX / mapViewState.baseWidth) * 100));
-        const y = Math.max(0, Math.min(100, (localY / mapViewState.baseHeight) * 100));
-
-        const newMachine = {
-            id: generateId(),
-            name: name,
-            type: type,
-            brand: brand,
-            icon: iconPath,
-            status: 'idle',
-            position: { x, y },
-            workers: [],
-            efficiency: 0,
-            lastMaintenance: new Date().toISOString().split('T')[0],
-            todos: []
-        };
-
-        state.machines.push(newMachine);
-        card.dataset.activated = 'true';
-        card.remove();
-        renderMachines();
-        renderMachinesList();
-        updateStats();
-    }
-
     document.querySelectorAll('.machine-card').forEach(card => {
         card.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (card.dataset.machineId) {
+                openMachineMenu(card.dataset.machineId);
+                return;
+            }
             activateMachineCard(card);
+            if (card.dataset.machineId) {
+                openMachineMenu(card.dataset.machineId);
+            }
         });
     });
     
@@ -2721,11 +2944,15 @@ function init() {
     renderRooms();
     renderMachines();
     renderTags();
+    syncMachineCardsToState();
     renderMachinesList();
     renderWorkersList();
     updateStats();
     updateShiftProgress();
     initMapInteractions();
+    if (typeof syncMachineCardsToState === 'function') {
+        requestAnimationFrame(() => syncMachineCardsToState());
+    }
     loadWorkersFromFirestore();
     // Load shift info from Firestore and refresh periodically
     try {

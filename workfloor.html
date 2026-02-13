@@ -17,6 +17,9 @@
                     <h1>Factory Floor Management System</h1>
                     <p>Monitor and manage machines, workers, and floor operations</p>
                 </div>
+                <div class="header-actions">
+                    <a class="form-btn form-btn-primary" href="schedule-editor.html">Schedule Planner</a>
+                </div>
             </div>
 
             <!-- Debug / Schedule Fetch Info -->
@@ -401,6 +404,7 @@
                                     <span class="machine-card-label">ENJ-R07</span>
                                 </div>
 
+
                                 <!-- Fire safety points (aligned to aisles) -->
                                 <div class="safety-point extinguisher" style="left:612px; top:1070px;">
                                     <svg class="ext-icon" viewBox="0 0 200 200" aria-hidden="true">
@@ -668,6 +672,14 @@
                         <div class="section-header">
                             <h2>Machines</h2>
                         </div>
+                        <div class="machine-brand-summary" id="machineBrandSummary"></div>
+                        <details class="machine-map-collapse">
+                            <summary class="machine-map-summary-title">
+                                <span class="machine-map-summary-icon" aria-hidden="true">📍</span>
+                                Map machines
+                            </summary>
+                            <div class="machine-map-summary" id="machineMapSummary"></div>
+                        </details>
                         <div class="scrollable-list" id="machinesList">
                             <!-- Machines will be added by JS -->
                         </div>

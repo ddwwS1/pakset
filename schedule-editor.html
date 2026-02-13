@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schedule Planner</title>
+  <link rel="icon" type="image/png" href="assets/icons/logos/PAKSET-black-logo-e.png" />
+  <link rel="stylesheet" href="css/schedule-editor.css" />
+</head>
+<body>
+  <div class="planner-app">
+    <header class="planner-header">
+      <div class="header-left">
+        <img src="assets/icons/logos/PAKSET-black-logo-e.png" alt="Pakset logo" class="logo" />
+        <div>
+          <h1>Schedule Planner</h1>
+          <p>Edit worker schedules.</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-secondary" href="workfloor.html">Back to Workfloor</a>
+      </div>
+    </header>
+
+    <section class="planner-controls">
+      <div class="control-group">
+        <button class="btn btn-icon" id="prevWeekBtn" aria-label="Previous week">◀</button>
+        <input type="date" id="weekPicker" class="input" />
+        <button class="btn btn-icon" id="nextWeekBtn" aria-label="Next week">▶</button>
+        <button class="btn btn-primary" id="loadWeekBtn">Load Week</button>
+      </div>
+      <div class="control-group">
+        <span class="control-icon icon-sort" aria-hidden="true"></span>
+        <label class="control-label" for="sortBy">Sort</label>
+        <select id="sortBy" class="input">
+          <option value="name">Name</option>
+          <option value="shift">Shift (week)</option>
+        </select>
+        <span class="control-icon icon-filter" aria-hidden="true"></span>
+        <label class="control-label" for="shiftFilter">Shift filter</label>
+        <select id="shiftFilter" class="input">
+          <option value="all">All</option>
+          <option value="morning">Morning</option>
+          <option value="afternoon">Afternoon</option>
+          <option value="night">Night</option>
+        </select>
+        <span class="control-icon icon-search" aria-hidden="true"></span>
+        <input type="text" id="workerSearch" class="input" placeholder="Search workers..." />
+        <span id="plannerStatus" class="status-pill">Ready</span>
+      </div>
+    </section>
+
+
+    <section class="planner-grid-wrap">
+      <div class="selection-bar">
+        <span id="selectionCount">No cells selected</span>
+        <button class="btn btn-secondary" id="clearSelectionBtn">Clear Selection</button>
+      </div>
+      <div id="plannerGrid" class="planner-grid" role="table" aria-label="Weekly schedule grid"></div>
+    </section>
+  </div>
+
+  <aside class="details-panel" id="detailsPanel" aria-hidden="true">
+    <div class="details-header">
+      <div>
+        <h2 id="detailWorker">Worker</h2>
+        <p id="detailDate">Date</p>
+        <span class="edit-scope" id="editScope">Editing 1 day</span>
+      </div>
+      <button class="btn btn-icon" id="closeDetails">✕</button>
+    </div>
+
+    <div class="details-body">
+      <label class="field">
+        <span>Status</span>
+        <select id="detailStatus" class="input">
+          <option value="scheduled">Scheduled</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Shift</span>
+        <select id="detailShift" class="input">
+          <option value="morning">Morning</option>
+          <option value="afternoon">Afternoon</option>
+          <option value="night">Night</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Start</span>
+          <input type="time" id="detailStart" class="input" />
+        </label>
+        <label class="field">
+          <span>End</span>
+          <input type="time" id="detailEnd" class="input" />
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Duration (hours)</span>
+          <input type="number" id="detailDuration" class="input" min="0" step="0.5" />
+        </label>
+        <label class="field">
+          <span>Overtime (hours)</span>
+          <input type="number" id="detailOvertime" class="input" min="0" step="0.5" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Notes</span>
+        <textarea id="detailNotes" class="input" rows="3" placeholder="Optional notes..."></textarea>
+      </label>
+
+      <div class="bulk-panel">
+        <div class="bulk-title">Apply to multiple days</div>
+        <p class="bulk-help">Select multiple cells (Shift/Ctrl + click), then save once.</p>
+      </div>
+    </div>
+
+    <div class="details-footer">
+      <button class="btn btn-secondary" id="resetOverrideBtn">Reset to Default</button>
+      <button class="btn btn-primary" id="saveDetailsBtn">Save Changes</button>
+    </div>
+  </aside>
+
+  <div class="loading-overlay" id="loadingOverlay" aria-hidden="true">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p>Loading schedules...</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/schedule-editor.js"></script>
+</body>
+</html>
