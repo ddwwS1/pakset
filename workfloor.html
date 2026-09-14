@@ -18,7 +18,10 @@
                     <p>Monitor and manage machines, workers, and floor operations</p>
                 </div>
                 <div class="header-actions">
-                    <a class="form-btn form-btn-primary" href="schedule-editor.html">Schedule Planner</a>
+                    <button id="openCafeteriaBtn" class="form-btn form-btn-secondary" style="color:#b45309; font-weight:700;">🍱 Cafeteria & Breaks</button>
+                    <button id="openQcInspectionBtn" class="form-btn form-btn-secondary" style="color:#047857; font-weight:700;">🔍 Machine Inspection</button>
+                    <a class="form-btn form-btn-secondary" href="worker-accounts.html">👥 Worker Accounts</a>
+                    <a class="form-btn form-btn-primary" href="schedule-editor.html">📅 Schedule Planner</a>
                 </div>
             </div>
 
@@ -48,8 +51,17 @@
                         <div class="shift-time" id="shiftTime">Start: —  End: —</div>
                     </div>
                 </div>
-                <div class="progress-bar">
+                <div class="progress-bar" id="progressBar">
                     <div class="progress-fill" id="progressFill"></div>
+                    <!-- Compass / Ruler Scale Overlay (Hours & 10-Min Scores) -->
+                    <div class="progress-compass-overlay" id="progressCompassOverlay">
+                        <div class="compass-ruler-track" id="compassRulerTrack"></div>
+                        <div class="compass-cursor-line" id="compassCursorLine">
+                            <div class="compass-cursor-badge" id="compassCursorBadge">--:--</div>
+                        </div>
+                    </div>
+                    <!-- Lunch & Food Break Pins Container -->
+                    <div id="progressLunchMarkersContainer" style="position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none;"></div>
                     <div class="progress-overtime-area" id="progressOvertimeArea"></div>
                     <div class="progress-overtime-fill" id="progressOvertimeFill"></div>
                     <div class="progress-pulse" aria-hidden="true"></div>
@@ -708,6 +720,245 @@
         </div>
     </div>
 
+    <!-- Cafeteria & Food Break Menu Modal -->
+    <div id="cafeteriaModal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.4);
+        backdrop-filter: blur(4px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        padding: 16px;
+    ">
+        <div style="
+            width: 100%;
+            max-width: 720px;
+            max-height: 88vh;
+            background: #e0e5ec;
+            padding: 28px;
+            border-radius: 24px;
+            box-shadow: 9px 9px 16px #a3b1c6, -9px -9px 16px #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #2d3748;
+        ">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid rgba(163,177,198,0.3); padding-bottom:12px;">
+                <div>
+                    <h2 style="font-size:20px; font-weight:700; color:#2d3748;">🍱 Factory Cafeteria & Shift Lunch Breaks</h2>
+                    <p style="font-size:13px; color:#718096; margin-top:2px;">Daily shift food offerings & scheduled meal break times</p>
+                </div>
+                <button id="closeCafeteriaModalBtn" style="
+                    background: #e0e5ec;
+                    border: none;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 12px;
+                    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff;
+                    cursor: pointer;
+                    font-size: 16px;
+                ">✕</button>
+            </div>
+
+            <div id="cafeteriaAlert" style="display:none; padding:10px 14px; border-radius:12px; font-size:13px;"></div>
+
+            <!-- Scheduled Shift Breaks Section -->
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="font-size:16px; font-weight:700; color:#2d3748;">Scheduled Shift Breaks & Lunch Times</h3>
+                    <span id="cafeteriaEditBadge" style="display:none; font-size:11px; font-weight:700; padding:4px 10px; border-radius:12px; background:rgba(245,158,11,0.2); color:#b45309;">
+                        Chief Cook Management Active
+                    </span>
+                </div>
+                <div id="cafeteriaBreaksList" style="display:flex; flex-direction:column; gap:10px;">
+                    <!-- Rendered dynamically -->
+                </div>
+            </div>
+
+            <!-- Food Break Menu Offered -->
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
+                <h3 id="cafeteriaMenuTitle" style="font-size:16px; font-weight:700; color:#2d3748;">Today's Cafeteria Food Offerings</h3>
+                <div id="cafeteriaMenuItemsList" style="display:flex; flex-direction:column; gap:10px;">
+                    <!-- Rendered by JS -->
+                </div>
+            </div>
+
+            <!-- Chief Cook Edit Form (Only visible to Chief Cook & Supervisor) -->
+            <div id="chiefCookFormWrap" style="display:none; border-top:2px solid rgba(163,177,198,0.3); padding-top:16px; margin-top:8px;">
+                <h4 style="font-size:15px; font-weight:700; color:#f59e0b; margin-bottom:12px;">⚙️ Chief Cook: Assign Shift Breaks & Food Menu</h4>
+                
+                <!-- Add / Edit Break Sub-form -->
+                <form id="addBreakForm" style="display:flex; flex-direction:column; gap:12px; background:#e0e5ec; padding:16px; border-radius:18px; box-shadow:inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff; margin-bottom:16px;">
+                    <input type="hidden" id="editingBreakId" value="" />
+                    <div id="addBreakFormTitle" style="font-weight:700; font-size:13px; color:#2d3748;">➕ Assign New Break for Shift</div>
+                    
+                    <div style="display:grid; grid-template-columns:1.5fr 1fr 1fr; gap:12px;">
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <label style="font-size:12px; font-weight:600;">Break Title / Name *</label>
+                            <input type="text" id="addBreakName" required style="padding:10px; border-radius:12px; border:none; background:#e0e5ec; box-shadow:inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff; outline:none;" placeholder="e.g. Lunch Break, Tea Break" />
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <label style="font-size:12px; font-weight:600;">Start Time (Clock/Type) *</label>
+                            <input type="time" id="addBreakStartTime" required style="padding:10px; border-radius:12px; border:none; background:#e0e5ec; box-shadow:inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff; outline:none;" value="12:30" />
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <label style="font-size:12px; font-weight:600;">End Time (Clock/Type) *</label>
+                            <input type="time" id="addBreakEndTime" required style="padding:10px; border-radius:12px; border:none; background:#e0e5ec; box-shadow:inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff; outline:none;" value="13:30" />
+                        </div>
+                    </div>
+
+                    <!-- Visual Gridded Hours Sheet Collapsible Dropdown -->
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <button type="button" id="toggleHoursGridBtn" style="
+                            background: #e0e5ec;
+                            border: none;
+                            padding: 10px 14px;
+                            border-radius: 12px;
+                            box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+                            color: #3b82f6;
+                            font-weight: 700;
+                            font-size: 13px;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                        ">
+                            <span>📊 Select Break Time from Active Shift Hours (10-Min Blocks)</span>
+                            <span id="toggleHoursChevron">▼</span>
+                        </button>
+
+                        <div id="hoursGridDropdown" class="shift-hours-grid-wrapper" style="display:none;">
+                            <div class="shift-grid-title">
+                                <span id="shiftGridBannerText">⏱️ Current Shift Timeline • 10-Min Blocks</span>
+                                <span style="font-size:11px; color:#f59e0b; font-weight:700;">Click Start Slot, then Click End Slot</span>
+                            </div>
+                            <div id="shift10MinGridContainer" class="shift-10min-grid">
+                                <!-- Rendered dynamically by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:10px;">
+                        <button type="submit" id="addBreakSubmitBtn" style="
+                            flex: 1;
+                            padding: 10px;
+                            border-radius: 12px;
+                            border: none;
+                            background: #f59e0b;
+                            color: #ffffff;
+                            font-weight: 700;
+                            font-size: 13px;
+                            cursor: pointer;
+                            box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+                        ">➕ Assign Break & Place Pin on Progress Bar</button>
+                        <button type="button" id="cancelEditBreakBtn" style="
+                            display: none;
+                            padding: 10px 16px;
+                            border-radius: 12px;
+                            border: none;
+                            background: #e0e5ec;
+                            color: #718096;
+                            font-weight: 700;
+                            font-size: 13px;
+                            cursor: pointer;
+                            box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+                        ">Cancel Edit</button>
+                    </div>
+                </form>
+
+                <!-- Menu Offerings Sub-form -->
+                <form id="chiefCookMenuForm" style="display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <label style="font-size:12px; font-weight:600;">Menu Title</label>
+                        <input type="text" id="ccMenuTitle" required style="padding:10px; border-radius:12px; border:none; background:#e0e5ec; box-shadow:inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff; outline:none;" placeholder="e.g. Today's Cafeteria Special" />
+                    </div>
+
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <label style="font-size:12px; font-weight:600;">Food Break Menu Items (One per line format: Item Name | Category | Allergens/Notes)</label>
+                        <textarea id="ccMenuItemsRaw" rows="4" style="padding:10px; border-radius:12px; border:none; background:#e0e5ec; box-shadow:inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff; outline:none; font-family:inherit;" placeholder="Grilled Chicken & Rice | Main Course | Halal
+Fresh Salad Bar | Sides | Gluten Free
+Iced Tea & Fresh Fruit | Dessert | Vegan"></textarea>
+                    </div>
+
+                    <button type="submit" id="saveChiefCookMenuBtn" style="
+                        padding: 12px;
+                        border-radius: 14px;
+                        border: none;
+                        background: #3b82f6;
+                        color: #ffffff;
+                        font-weight: 700;
+                        font-size: 14px;
+                        cursor: pointer;
+                        box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff;
+                    ">Publish Daily Food Menu</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quality Control & Workfloor Supervisor Machine Inspection Modal -->
+    <div id="qcInspectionModal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.4);
+        backdrop-filter: blur(4px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        padding: 16px;
+    ">
+        <div style="
+            width: 100%;
+            max-width: 820px;
+            max-height: 85vh;
+            background: #e0e5ec;
+            padding: 28px;
+            border-radius: 24px;
+            box-shadow: 9px 9px 16px #a3b1c6, -9px -9px 16px #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #2d3748;
+        ">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid rgba(163,177,198,0.3); padding-bottom:12px;">
+                <div>
+                    <h2 style="font-size:20px; font-weight:700; color:#2d3748;">🔍 Machine Workers Detailed Inspection</h2>
+                    <p style="font-size:13px; color:#718096; margin-top:2px;">Restricted View: Authorized for Quality Control & Workfloor Supervisors</p>
+                </div>
+                <button id="closeQcModalBtn" style="
+                    background: #e0e5ec;
+                    border: none;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 12px;
+                    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff;
+                    cursor: pointer;
+                    font-size: 16px;
+                ">✕</button>
+            </div>
+
+            <div id="qcModalNotice" style="display:none; padding:10px 14px; border-radius:12px; font-size:13px;"></div>
+
+            <div id="qcMachinesContainer" style="display:flex; flex-direction:column; gap:14px; margin-top:8px;">
+                <!-- Populated dynamically by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/auth-guard.js"></script>
     <script type="module" src="js/workfloor.js"></script>
 </body>
 </html>

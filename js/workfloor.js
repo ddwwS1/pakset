@@ -1,4 +1,4 @@
-import { db, doc, getDoc, fetchSchedulesByDateRange, fetchAllWorkers } from './firabase.js';
+import { db, doc, getDoc, fetchSchedulesByDateRange, fetchAllWorkers, fetchRoles, fetchCafeteriaSchedule, saveCafeteriaSchedule } from './firabase.js';
 
 // ============================================================================
 // STATE MANAGEMENT
@@ -438,6 +438,12 @@ function updateShiftProgress() {
     // Keep regular fill blue and overtime fill orange; visibility already set above
 
     document.getElementById('shiftName').textContent = state.currentShiftName || 'Current Shift';
+
+    const compassKey = `${state.currentShiftName}_${state.shiftStartTime}_${state.shiftEndTime}`;
+    if (state.lastCompassShiftKey !== compassKey) {
+        state.lastCompassShiftKey = compassKey;
+        renderProgressCompassScale();
+    }
 }
 
 // ============================================================================
@@ -451,6 +457,38 @@ function parseTimeForDate(baseDateStr, timeStr) {
     const [hh, mm] = timeStr.split(':').map(n => parseInt(n, 10));
     return new Date(y, m - 1, d, hh || 0, mm || 0, 0, 0);
 }
+
+// Synchronously initialize state with active fallback shift on script load
+function initActiveShiftState() {
+    const now = new Date();
+    const nowTs = now.getTime();
+    const pad = (n) => String(n).padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const yestDate = new Date(now.getTime() - 24 * 3600 * 1000);
+    const yestStr = `${yestDate.getFullYear()}-${pad(yestDate.getMonth() + 1)}-${pad(yestDate.getDate())}`;
+    const tomDate = new Date(now.getTime() + 24 * 3600 * 1000);
+    const tomStr = `${tomDate.getFullYear()}-${pad(tomDate.getMonth() + 1)}-${pad(tomDate.getDate())}`;
+
+    const instances = [
+        { name: 'Morning Shift', start: parseTimeForDate(todayStr, '07:30'), end: parseTimeForDate(todayStr, '15:30'), duration: 8, overtime: 0 },
+        { name: 'Afternoon Shift', start: parseTimeForDate(todayStr, '15:30'), end: parseTimeForDate(todayStr, '23:30'), duration: 8, overtime: 0 },
+        { name: 'Night Shift', start: parseTimeForDate(yestStr, '19:30'), end: parseTimeForDate(todayStr, '07:30'), duration: 8, overtime: 4 },
+        { name: 'Night Shift', start: parseTimeForDate(todayStr, '19:30'), end: parseTimeForDate(tomStr, '07:30'), duration: 8, overtime: 4 }
+    ];
+
+    const active = instances.find(inst => nowTs >= inst.start.getTime() && nowTs <= inst.end.getTime()) || instances[0];
+
+    state.shiftStartTime = active.start.getTime();
+    state.shiftEndTime = active.end.getTime();
+    state.shiftRegularMs = active.duration * 3600 * 1000;
+    state.shiftOvertimeMs = active.overtime * 3600 * 1000;
+    state.shiftTotalMs = state.shiftRegularMs + state.shiftOvertimeMs;
+    state.shiftDurationHours = Math.max(1, Math.round(state.shiftTotalMs / (3600 * 1000)));
+    state.currentShiftName = active.name;
+    state.currentShiftKey = normalizeShiftName(active.name);
+}
+
+initActiveShiftState();
 
 async function fetchSchedulesForDates(dateStrs) {
     state.fetchErrors = [];
@@ -1097,6 +1135,10 @@ async function loadCurrentShiftFromFirestore() {
     updateShiftProgress();
     renderWorkersList();
     updateStats();
+
+    try {
+        fetchCafeteriaSchedule().then(sch => updateLunchProgressMarker(sch)).catch(() => {});
+    } catch (_) {}
 }
 
 // Build a small set of fallback shift instances based on local time ranges so UI can still render
@@ -2687,6 +2729,10 @@ function deleteWorker(workerId) {
 // ============================================================================
 
 function setupEventListeners() {
+    setupQcInspectionModal();
+    setupCafeteriaModal();
+    setupCompassHoverInteraction();
+
     // Edit mode toggle
     document.getElementById('editModeToggle').addEventListener('click', () => {
         state.isEditMode = !state.isEditMode;
@@ -2932,6 +2978,950 @@ function setupEventListeners() {
             } finally {
                 scheduleLoadBtn.disabled = false;
             }
+        });
+    }
+}
+
+function renderProgressCompassScale() {
+    const track = document.getElementById('compassRulerTrack');
+    if (!track) return;
+
+    track.innerHTML = '';
+
+    if (!state.shiftStartTime || !state.shiftTotalMs || state.shiftTotalMs <= 0) return;
+
+    const shiftStart = new Date(state.shiftStartTime);
+    const shiftEnd = new Date(state.shiftEndTime || (state.shiftStartTime + state.shiftTotalMs));
+    const totalMs = state.shiftTotalMs;
+    const totalMins = totalMs / (60 * 1000);
+
+    if (totalMins <= 0) return;
+
+    // Render tick marks every 10 minutes throughout active shift window
+    for (let m = 0; m <= totalMins; m += 10) {
+        const pct = (m / totalMins) * 100;
+        const tickTime = new Date(shiftStart.getTime() + m * 60 * 1000);
+        const hours = tickTime.getHours();
+        const mins = tickTime.getMinutes();
+
+        // Long score for full hours or shift start/end
+        const isFullHour = (mins === 0) || (m === 0) || (m === totalMins);
+
+        const tick = document.createElement('div');
+        tick.className = isFullHour ? 'compass-tick compass-tick-long' : 'compass-tick compass-tick-half';
+        tick.style.left = `${pct}%`;
+
+        if (isFullHour) {
+            const hStr = String(hours).padStart(2, '0');
+            const mStr = String(mins).padStart(2, '0');
+            const label = document.createElement('span');
+            label.className = 'compass-hour-label';
+            label.textContent = `${hStr}:${mStr}`;
+            tick.appendChild(label);
+        }
+
+        track.appendChild(tick);
+    }
+}
+
+function setupCompassHoverInteraction() {
+    const progressBar = document.getElementById('progressBar');
+    const cursorLine = document.getElementById('compassCursorLine');
+    const cursorBadge = document.getElementById('compassCursorBadge');
+
+    if (!progressBar || !cursorLine || !cursorBadge) return;
+
+    progressBar.addEventListener('mousemove', (e) => {
+        if (!state.shiftStartTime || !state.shiftTotalMs || state.shiftTotalMs <= 0) return;
+
+        const rect = progressBar.getBoundingClientRect();
+        if (rect.width <= 0) return;
+
+        const mouseX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+        const pct = (mouseX / rect.width) * 100;
+
+        const shiftStart = new Date(state.shiftStartTime);
+        const shiftEnd = new Date(state.shiftEndTime || (state.shiftStartTime + state.shiftTotalMs));
+        const cursorMs = shiftStart.getTime() + (pct / 100) * (shiftEnd.getTime() - shiftStart.getTime());
+        const cursorDate = new Date(cursorMs);
+
+        const h = String(cursorDate.getHours()).padStart(2, '0');
+        const m = String(cursorDate.getMinutes()).padStart(2, '0');
+        const timeStr = formatTime12h(`${h}:${m}`);
+
+        cursorLine.style.left = `${pct}%`;
+        cursorLine.style.display = 'block';
+        cursorBadge.textContent = timeStr;
+    });
+
+    progressBar.addEventListener('mouseleave', () => {
+        if (cursorLine) cursorLine.style.display = 'none';
+    });
+}
+
+function formatTime12h(time24) {
+    if (!time24) return '';
+    const [hStr, mStr] = time24.split(':');
+    let h = parseInt(hStr, 10);
+    const m = mStr || '00';
+    if (isNaN(h)) return time24;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    const padH = String(h).padStart(2, '0');
+    return `${padH}:${m} ${ampm}`;
+}
+
+function convertTimesToPercentages(startTimeStr, endTimeStr) {
+    if (!startTimeStr || !endTimeStr) return { startPct: 0, endPct: 0, widthPct: 0, valid: false };
+
+    const [sH, sM] = startTimeStr.split(':').map(Number);
+    const [eH, eM] = endTimeStr.split(':').map(Number);
+
+    let shiftStart = state.shiftStartTime ? new Date(state.shiftStartTime) : null;
+    let shiftEnd = state.shiftEndTime ? new Date(state.shiftEndTime) : null;
+    let shiftTotalMs = state.shiftTotalMs;
+
+    if (!shiftStart || !shiftEnd || !shiftTotalMs || shiftTotalMs <= 0) {
+        shiftStart = new Date();
+        shiftStart.setHours(7, 30, 0, 0);
+        shiftEnd = new Date(shiftStart.getTime() + 12 * 3600 * 1000);
+        shiftTotalMs = 12 * 3600 * 1000;
+    }
+
+    // Helper: Find exact Date in active shift window matching [h, m]
+    function findTimeInShift(h, m) {
+        const base = new Date(shiftStart.getTime());
+        base.setHours(h, m, 0, 0);
+
+        const candidates = [
+            new Date(base.getTime() - 24 * 3600 * 1000),
+            new Date(base.getTime()),
+            new Date(base.getTime() + 24 * 3600 * 1000)
+        ];
+
+        return candidates.find(c => 
+            c.getTime() >= shiftStart.getTime() - 15 * 60 * 1000 && 
+            c.getTime() <= shiftEnd.getTime() + 15 * 60 * 1000
+        ) || null;
+    }
+
+    const breakStart = findTimeInShift(sH, sM);
+
+    // If breakStart is outside current active shift window, flag as invalid for this shift
+    if (!breakStart) {
+        return { startPct: 0, endPct: 0, widthPct: 0, valid: false };
+    }
+
+    let breakStartMs = breakStart.getTime();
+    let breakEnd = findTimeInShift(eH, eM);
+    let breakEndMs = breakEnd ? breakEnd.getTime() : breakStartMs + 30 * 60 * 1000;
+
+    if (breakEndMs <= breakStartMs) {
+        breakEndMs += 24 * 3600 * 1000;
+    }
+
+    // Limit break duration to max 3 hours to prevent stretching bugs
+    if (breakEndMs - breakStartMs > 3 * 3600 * 1000) {
+        breakEndMs = breakStartMs + 60 * 60 * 1000;
+    }
+
+    const startOffsetMs = breakStartMs - shiftStart.getTime();
+    const durationMs = breakEndMs - breakStartMs;
+
+    const startPct = Math.max(0, Math.min(98, (startOffsetMs / shiftTotalMs) * 100));
+    const widthPct = Math.max(2, Math.min(100 - startPct, (durationMs / shiftTotalMs) * 100));
+    const endPct = Math.min(100, startPct + widthPct);
+
+    return { 
+        startPct: Math.round(startPct * 10) / 10, 
+        endPct: Math.round(endPct * 10) / 10,
+        widthPct: Math.round(widthPct * 10) / 10,
+        valid: true
+    };
+}
+
+let gridSelectionState = {
+    firstClickTime: null
+};
+
+function getMinutesFromShiftStart(timeStr, shiftStart) {
+    if (!timeStr || !shiftStart) return 0;
+    const [h, m] = timeStr.split(':').map(Number);
+    
+    const candidateBase = new Date(shiftStart.getTime());
+    candidateBase.setHours(h, m, 0, 0);
+
+    const d0 = new Date(candidateBase.getTime() - 24 * 3600 * 1000);
+    const d1 = new Date(candidateBase.getTime());
+    const d2 = new Date(candidateBase.getTime() + 24 * 3600 * 1000);
+
+    const candidates = [d0, d1, d2];
+    const inWindow = candidates.find(c => 
+        c.getTime() >= shiftStart.getTime() - 30 * 60 * 1000 && 
+        c.getTime() <= shiftStart.getTime() + 24 * 3600 * 1000
+    );
+
+    const best = inWindow || candidates.sort((a, b) => Math.abs(a.getTime() - shiftStart.getTime()) - Math.abs(b.getTime() - shiftStart.getTime()))[0];
+
+    return (best.getTime() - shiftStart.getTime()) / (60 * 1000);
+}
+
+function buildHoursGridSheet() {
+    const container = document.getElementById('shift10MinGridContainer');
+    const bannerEl = document.getElementById('shiftGridBannerText');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // Determine active shift start & end timestamps
+    let shiftStart = new Date();
+    let shiftEnd = new Date(shiftStart.getTime() + 12 * 3600 * 1000);
+
+    if (state.shiftStartTime && state.shiftEndTime) {
+        shiftStart = new Date(state.shiftStartTime);
+        shiftEnd = new Date(state.shiftEndTime);
+    } else {
+        shiftStart.setHours(7, 30, 0, 0);
+        shiftEnd = new Date(shiftStart.getTime() + 12 * 3600 * 1000);
+    }
+
+    const startH = String(shiftStart.getHours()).padStart(2, '0');
+    const startM = String(shiftStart.getMinutes()).padStart(2, '0');
+    const endH = String(shiftEnd.getHours()).padStart(2, '0');
+    const endM = String(shiftEnd.getMinutes()).padStart(2, '0');
+
+    if (bannerEl) {
+        const shiftName = state.currentShiftName || 'Active Shift';
+        bannerEl.textContent = `⏱️ ${shiftName} Hours (${startH}:${startM} - ${endH}:${endM}) • 10-Min Blocks`;
+    }
+
+    // Generate 10-minute slots throughout active shift window
+    const curr = new Date(shiftStart.getTime());
+    while (curr.getTime() <= shiftEnd.getTime()) {
+        const h = String(curr.getHours()).padStart(2, '0');
+        const m = String(curr.getMinutes()).padStart(2, '0');
+        const timeStr = `${h}:${m}`;
+
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'tenmin-block-chip';
+        chip.dataset.time = timeStr;
+        chip.textContent = timeStr;
+
+        chip.addEventListener('click', () => {
+            handleHourBlockClick(timeStr);
+        });
+
+        container.appendChild(chip);
+
+        curr.setMinutes(curr.getMinutes() + 10);
+    }
+
+    highlightSelectedHoursGrid();
+}
+
+function handleHourBlockClick(timeStr) {
+    const startInput = document.getElementById('addBreakStartTime');
+    const endInput = document.getElementById('addBreakEndTime');
+
+    let shiftStart = state.shiftStartTime ? new Date(state.shiftStartTime) : null;
+    if (!shiftStart) {
+        shiftStart = new Date();
+        shiftStart.setHours(7, 30, 0, 0);
+    }
+
+    if (!gridSelectionState.firstClickTime) {
+        gridSelectionState.firstClickTime = timeStr;
+        if (startInput) startInput.value = timeStr;
+    } else {
+        const firstTime = gridSelectionState.firstClickTime;
+        gridSelectionState.firstClickTime = null;
+
+        const offset1 = getMinutesFromShiftStart(firstTime, shiftStart);
+        const offset2 = getMinutesFromShiftStart(timeStr, shiftStart);
+
+        if (offset1 <= offset2) {
+            if (startInput) startInput.value = firstTime;
+            if (endInput) endInput.value = timeStr;
+        } else {
+            if (startInput) startInput.value = timeStr;
+            if (endInput) endInput.value = firstTime;
+        }
+    }
+
+    highlightSelectedHoursGrid();
+}
+
+function highlightSelectedHoursGrid() {
+    const container = document.getElementById('shift10MinGridContainer');
+    if (!container) return;
+
+    let shiftStart = new Date();
+    if (state.shiftStartTime) {
+        shiftStart = new Date(state.shiftStartTime);
+    } else {
+        shiftStart.setHours(7, 30, 0, 0);
+    }
+
+    const startVal = document.getElementById('addBreakStartTime')?.value;
+    const endVal = document.getElementById('addBreakEndTime')?.value;
+
+    const startOffset = startVal ? getMinutesFromShiftStart(startVal, shiftStart) : null;
+    const endOffset = endVal ? getMinutesFromShiftStart(endVal, shiftStart) : null;
+
+    container.querySelectorAll('.tenmin-block-chip').forEach(chip => {
+        const t = chip.dataset.time;
+        const slotOffset = getMinutesFromShiftStart(t, shiftStart);
+        
+        chip.classList.remove('selected-boundary', 'in-range');
+
+        if (gridSelectionState.firstClickTime) {
+            if (t === gridSelectionState.firstClickTime) {
+                chip.classList.add('selected-boundary');
+            }
+        } else if (startOffset !== null && endOffset !== null) {
+            const minO = Math.min(startOffset, endOffset);
+            const maxO = Math.max(startOffset, endOffset);
+
+            if (Math.abs(slotOffset - minO) < 1 || Math.abs(slotOffset - maxO) < 1) {
+                chip.classList.add('selected-boundary');
+            } else if (slotOffset > minO && slotOffset < maxO) {
+                chip.classList.add('in-range');
+            }
+        }
+    });
+}
+
+function resetBreakForm() {
+    const editingIdEl = document.getElementById('editingBreakId');
+    const nameEl = document.getElementById('addBreakName');
+    const titleEl = document.getElementById('addBreakFormTitle');
+    const submitBtn = document.getElementById('addBreakSubmitBtn');
+    const cancelBtn = document.getElementById('cancelEditBreakBtn');
+
+    if (editingIdEl) editingIdEl.value = '';
+    if (nameEl) nameEl.value = '';
+    if (titleEl) titleEl.textContent = '➕ Assign New Break for Shift';
+    if (submitBtn) submitBtn.textContent = '➕ Assign Break & Place Pin on Progress Bar';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+
+    gridSelectionState.firstClickTime = null;
+    highlightSelectedHoursGrid();
+}
+
+// Cafeteria & Shift Lunch Break Modal Handler
+async function setupCafeteriaModal() {
+    const openBtn = document.getElementById('openCafeteriaBtn');
+    const closeBtn = document.getElementById('closeCafeteriaModalBtn');
+    const modal = document.getElementById('cafeteriaModal');
+
+    if (!modal) return;
+
+    buildHoursGridSheet();
+
+    // Attach hours grid dropdown toggle
+    const toggleGridBtn = document.getElementById('toggleHoursGridBtn');
+    const gridDropdown = document.getElementById('hoursGridDropdown');
+    const chevronEl = document.getElementById('toggleHoursChevron');
+
+    if (toggleGridBtn && gridDropdown) {
+        toggleGridBtn.addEventListener('click', () => {
+            const isHidden = gridDropdown.style.display === 'none' || !gridDropdown.style.display;
+            buildHoursGridSheet();
+            gridDropdown.style.display = isHidden ? 'flex' : 'none';
+            if (chevronEl) chevronEl.textContent = isHidden ? '▲' : '▼';
+            if (isHidden) highlightSelectedHoursGrid();
+        });
+    }
+
+    // Attach time inputs change handlers to update grid live
+    const startTimeInput = document.getElementById('addBreakStartTime');
+    const endTimeInput = document.getElementById('addBreakEndTime');
+    if (startTimeInput) startTimeInput.addEventListener('input', highlightSelectedHoursGrid);
+    if (endTimeInput) endTimeInput.addEventListener('input', highlightSelectedHoursGrid);
+
+    // Cancel edit button
+    const cancelBtn = document.getElementById('cancelEditBreakBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', resetBreakForm);
+    }
+
+    // Synchronize lunch markers on progress bar
+    try {
+        const schedule = await fetchCafeteriaSchedule();
+        updateLunchProgressMarker(schedule);
+    } catch (_) {}
+
+    const openHandler = async () => {
+        const userRole = (sessionStorage.getItem('pakset_user_role') || 'supervisor').toLowerCase();
+        let isChiefCook = (userRole === 'chief_cook' || userRole === 'supervisor' || userRole === 'workfloor_chef');
+        
+        try {
+            const roles = await fetchRoles();
+            const roleObj = roles.find(r => r.id === userRole);
+            if (roleObj && Array.isArray(roleObj.permissions) && roleObj.permissions.includes('manage_cafeteria')) {
+                isChiefCook = true;
+            }
+        } catch (_) {}
+
+        if (userRole === 'supervisor' || userRole === 'chief_cook') {
+            isChiefCook = true;
+        }
+
+        const schedule = await fetchCafeteriaSchedule();
+        renderCafeteriaModal(schedule, isChiefCook);
+        modal.style.display = 'flex';
+    };
+
+    if (openBtn) openBtn.addEventListener('click', openHandler);
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+    }
+
+    // Chief Cook Add / Edit Break Form Handler
+    const addBreakForm = document.getElementById('addBreakForm');
+    if (addBreakForm) {
+        addBreakForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const editingId = document.getElementById('editingBreakId')?.value;
+            const name = document.getElementById('addBreakName').value.trim();
+            const startTime = document.getElementById('addBreakStartTime').value;
+            const endTime = document.getElementById('addBreakEndTime').value;
+
+            const timeText = `${formatTime12h(startTime)} - ${formatTime12h(endTime)}`;
+            const { startPct, endPct, widthPct } = convertTimesToPercentages(startTime, endTime);
+
+            const schedule = await fetchCafeteriaSchedule();
+            const breaks = Array.isArray(schedule.breaks) ? schedule.breaks : [];
+
+            if (editingId) {
+                const idx = breaks.findIndex(x => x.id === editingId);
+                if (idx >= 0) {
+                    breaks[idx] = {
+                        ...breaks[idx],
+                        name,
+                        startTime,
+                        endTime,
+                        timeText,
+                        startPct,
+                        endPct,
+                        widthPct
+                    };
+                }
+            } else {
+                const newBreak = {
+                    id: `break-${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    name,
+                    startTime,
+                    endTime,
+                    timeText,
+                    startPct,
+                    endPct,
+                    widthPct
+                };
+                breaks.push(newBreak);
+            }
+
+            schedule.breaks = breaks;
+            schedule.updatedBy = sessionStorage.getItem('pakset_user_name') || 'Chief Cook';
+
+            await saveCafeteriaSchedule(schedule);
+            updateLunchProgressMarker(schedule);
+            renderCafeteriaModal(schedule, true);
+
+            resetBreakForm();
+
+            const alertEl = document.getElementById('cafeteriaAlert');
+            if (alertEl) {
+                alertEl.style.display = 'block';
+                alertEl.style.background = 'rgba(16,185,129,0.2)';
+                alertEl.style.color = '#047857';
+                alertEl.textContent = editingId 
+                    ? `Break "${name}" (${timeText}) updated successfully!`
+                    : `Break "${name}" (${timeText}) assigned & placed on progress bar!`;
+            }
+        });
+    }
+
+    // Chief Cook Menu Form Handler
+    const menuForm = document.getElementById('chiefCookMenuForm');
+    if (menuForm) {
+        menuForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const menuTitle = document.getElementById('ccMenuTitle').value.trim();
+            const rawItems = document.getElementById('ccMenuItemsRaw').value.trim();
+
+            const items = rawItems.split('\n').filter(line => line.trim()).map(line => {
+                const parts = line.split('|').map(p => p.trim());
+                return {
+                    name: parts[0] || line,
+                    category: parts[1] || 'Special',
+                    notes: parts[2] || ''
+                };
+            });
+
+            const schedule = await fetchCafeteriaSchedule();
+            schedule.menuTitle = menuTitle;
+            schedule.menuItems = items;
+            schedule.updatedBy = sessionStorage.getItem('pakset_user_name') || 'Chief Cook';
+
+            await saveCafeteriaSchedule(schedule);
+            renderCafeteriaModal(schedule, true);
+
+            const alertEl = document.getElementById('cafeteriaAlert');
+            if (alertEl) {
+                alertEl.style.display = 'block';
+                alertEl.style.background = 'rgba(16,185,129,0.2)';
+                alertEl.style.color = '#047857';
+                alertEl.textContent = 'Daily Cafeteria Food Menu published successfully!';
+            }
+        });
+    }
+}
+
+function updateLunchProgressMarker(schedule) {
+    const container = document.getElementById('progressLunchMarkersContainer');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    const breaks = Array.isArray(schedule?.breaks) ? schedule.breaks : [];
+    if (breaks.length === 0) return;
+
+    breaks.forEach(b => {
+        let startPct = b.startPct;
+        let widthPct = b.widthPct;
+        let valid = true;
+
+        if (b.startTime && b.endTime) {
+            const pcts = convertTimesToPercentages(b.startTime, b.endTime);
+            startPct = pcts.startPct;
+            widthPct = pcts.widthPct;
+            valid = pcts.valid;
+        } else if (startPct !== undefined && b.endPct !== undefined) {
+            widthPct = Math.max(2, b.endPct - startPct);
+        }
+
+        if (valid === false || startPct === undefined || startPct === null) return;
+
+        if (widthPct === undefined || widthPct <= 0) widthPct = 10;
+
+        const pinWrap = document.createElement('div');
+        pinWrap.className = 'lunch-pin-wrapper';
+        pinWrap.style.left = `${startPct}%`;
+        pinWrap.style.width = `${widthPct}%`;
+
+        pinWrap.innerHTML = `
+            <div class="lunch-pin-badge" title="Click to open Cafeteria & Breaks Schedule">
+                <span style="font-size:13px;">🍱</span>
+                <span>${b.name} (${b.timeText || ''})</span>
+                <div class="lunch-pin-pointer"></div>
+            </div>
+            <div class="lunch-bar-highlight"></div>
+        `;
+
+        const badge = pinWrap.querySelector('.lunch-pin-badge');
+        badge.addEventListener('click', async () => {
+            const modal = document.getElementById('cafeteriaModal');
+            if (modal) {
+                const userRole = (sessionStorage.getItem('pakset_user_role') || 'worker').toLowerCase();
+                let isChiefCook = (userRole === 'chief_cook' || userRole === 'supervisor');
+                const sch = await fetchCafeteriaSchedule();
+                renderCafeteriaModal(sch, isChiefCook);
+                modal.style.display = 'flex';
+            }
+        });
+
+        container.appendChild(pinWrap);
+    });
+}
+
+function renderCafeteriaModal(schedule, isChiefCook) {
+    const breaksList = document.getElementById('cafeteriaBreaksList');
+    const titleEl = document.getElementById('cafeteriaMenuTitle');
+    const itemsList = document.getElementById('cafeteriaMenuItemsList');
+    const editBadge = document.getElementById('cafeteriaEditBadge');
+    const formWrap = document.getElementById('chiefCookFormWrap');
+
+    if (titleEl) titleEl.textContent = schedule.menuTitle || "Today's Cafeteria Food Offerings";
+
+    // Render Scheduled Breaks List
+    if (breaksList) {
+        breaksList.innerHTML = '';
+        const breaks = Array.isArray(schedule.breaks) ? schedule.breaks : [];
+
+        if (breaks.length === 0) {
+            breaksList.innerHTML = `
+                <div style="background:#e0e5ec; padding:14px; border-radius:16px; box-shadow:inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff; color:#718096; font-size:13px; font-style:italic; text-align:center;">
+                    No breaks or meal times currently scheduled for this shift by Chief Cook.
+                </div>
+            `;
+        } else {
+            breaks.forEach(b => {
+                const el = document.createElement('div');
+                el.style.cssText = `
+                    background: #e0e5ec;
+                    padding: 14px 18px;
+                    border-radius: 16px;
+                    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 12px;
+                `;
+
+                let pcts = { startPct: b.startPct, endPct: b.endPct, valid: true };
+                if (b.startTime && b.endTime) {
+                    pcts = convertTimesToPercentages(b.startTime, b.endTime);
+                }
+                const badgeLabel = pcts.valid 
+                    ? `Progress Bar: ${pcts.startPct}% - ${pcts.endPct}%`
+                    : `Shift Status: Scheduled (${b.timeText})`;
+
+                el.innerHTML = `
+                    <div>
+                        <div style="font-weight:800; font-size:15px; color:#2d3748; display:flex; align-items:center; gap:8px;">
+                            <span>🍱 ${b.name}</span>
+                            <span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:8px; background:rgba(245,158,11,0.2); color:#b45309;">
+                              ${badgeLabel}
+                            </span>
+                        </div>
+                        <div style="font-size:13px; font-weight:700; color:#3b82f6; margin-top:2px;">
+                          ⏱️ Time Window: ${b.timeText}
+                        </div>
+                    </div>
+                    ${isChiefCook ? `
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="edit-break-btn" data-id="${b.id}" style="
+                                background: #e0e5ec;
+                                border: none;
+                                padding: 6px 12px;
+                                border-radius: 10px;
+                                box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+                                color: #3b82f6;
+                                font-weight: 700;
+                                font-size: 12px;
+                                cursor: pointer;
+                            ">✏️ Edit Break</button>
+                            <button type="button" class="delete-break-btn" data-id="${b.id}" style="
+                                background: #e0e5ec;
+                                border: none;
+                                padding: 6px 12px;
+                                border-radius: 10px;
+                                box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+                                color: #ef4444;
+                                font-weight: 700;
+                                font-size: 12px;
+                                cursor: pointer;
+                            ">🗑️ Delete</button>
+                        </div>
+                    ` : ''}
+                `;
+
+                breaksList.appendChild(el);
+            });
+
+            // Attach Edit & Delete Break Event Handlers
+            if (isChiefCook) {
+                breaksList.querySelectorAll('.edit-break-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const breakId = btn.dataset.id;
+                        const targetBreak = schedule.breaks.find(x => x.id === breakId);
+                        if (targetBreak) {
+                            const editingIdEl = document.getElementById('editingBreakId');
+                            const nameEl = document.getElementById('addBreakName');
+                            const startInput = document.getElementById('addBreakStartTime');
+                            const endInput = document.getElementById('addBreakEndTime');
+                            const formTitle = document.getElementById('addBreakFormTitle');
+                            const submitBtn = document.getElementById('addBreakSubmitBtn');
+                            const cancelBtn = document.getElementById('cancelEditBreakBtn');
+
+                            if (editingIdEl) editingIdEl.value = targetBreak.id;
+                            if (nameEl) nameEl.value = targetBreak.name || '';
+                            if (startInput && targetBreak.startTime) startInput.value = targetBreak.startTime;
+                            if (endInput && targetBreak.endTime) endInput.value = targetBreak.endTime;
+
+                            if (formTitle) formTitle.textContent = `✏️ Edit Scheduled Break: "${targetBreak.name}"`;
+                            if (submitBtn) submitBtn.textContent = '💾 Save Break Changes';
+                            if (cancelBtn) cancelBtn.style.display = 'inline-block';
+
+                            // Expand hours dropdown if collapsed
+                            const gridDropdown = document.getElementById('hoursGridDropdown');
+                            const chevronEl = document.getElementById('toggleHoursChevron');
+                            if (gridDropdown) {
+                                gridDropdown.style.display = 'flex';
+                                if (chevronEl) chevronEl.textContent = '▲';
+                            }
+
+                            gridSelectionState.firstClickTime = null;
+                            highlightSelectedHoursGrid();
+
+                            // Scroll form into view smooth
+                            document.getElementById('addBreakForm')?.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    });
+                });
+
+                breaksList.querySelectorAll('.delete-break-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const breakId = btn.dataset.id;
+                        schedule.breaks = schedule.breaks.filter(x => x.id !== breakId);
+                        await saveCafeteriaSchedule(schedule);
+                        updateLunchProgressMarker(schedule);
+                        renderCafeteriaModal(schedule, true);
+                    });
+                });
+            }
+        }
+    }
+
+    // Render Menu Items
+    if (itemsList) {
+        itemsList.innerHTML = '';
+        const items = Array.isArray(schedule.menuItems) ? schedule.menuItems : [];
+
+        if (items.length === 0) {
+            itemsList.innerHTML = `<div style="color:#718096; font-size:13px; font-style:italic;">No food items listed for today.</div>`;
+        } else {
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.style.cssText = `
+                    background: #e0e5ec;
+                    padding: 12px 16px;
+                    border-radius: 14px;
+                    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 12px;
+                `;
+                el.innerHTML = `
+                    <div>
+                        <div style="font-weight:700; font-size:15px; color:#2d3748;">${item.name}</div>
+                        ${item.notes ? `<div style="font-size:12px; color:#718096; margin-top:2px;">ℹ️ ${item.notes}</div>` : ''}
+                    </div>
+                    <span style="font-size:11px; font-weight:700; padding:4px 10px; border-radius:10px; background:rgba(245,158,11,0.18); color:#b45309; text-transform:uppercase;">
+                        ${item.category || 'Food Item'}
+                    </span>
+                `;
+                itemsList.appendChild(el);
+            });
+        }
+    }
+
+    if (isChiefCook) {
+        if (editBadge) editBadge.style.display = 'inline-block';
+        if (formWrap) formWrap.style.display = 'block';
+
+        buildHoursGridSheet();
+
+        document.getElementById('ccMenuTitle').value = schedule.menuTitle || "Today's Cafeteria Food Offerings";
+        const rawLines = (schedule.menuItems || []).map(i => `${i.name} | ${i.category || 'Main Course'} | ${i.notes || ''}`).join('\n');
+        document.getElementById('ccMenuItemsRaw').value = rawLines;
+    } else {
+        if (editBadge) editBadge.style.display = 'none';
+        if (formWrap) formWrap.style.display = 'none';
+    }
+}
+
+// QC & Workfloor Supervisor Machine Inspection Modal Handler
+async function setupQcInspectionModal() {
+    const openBtn = document.getElementById('openQcInspectionBtn');
+    const closeBtn = document.getElementById('closeQcModalBtn');
+    const modal = document.getElementById('qcInspectionModal');
+
+    if (!openBtn || !modal) return;
+
+    openBtn.addEventListener('click', async () => {
+        // Permission check
+        const userRole = (sessionStorage.getItem('pakset_user_role') || 'worker').toLowerCase();
+        
+        // Fetch permissions for role
+        let hasQcPermission = false;
+        let hasAssignPermission = false;
+
+        try {
+            const roles = await fetchRoles();
+            const roleObj = roles.find(r => r.id === userRole);
+            if (roleObj) {
+                hasQcPermission = (roleObj.permissions || []).includes('view_qc_popups') || userRole === 'supervisor' || userRole === 'quality_control';
+                hasAssignPermission = (roleObj.permissions || []).includes('assign_machines') || userRole === 'supervisor' || userRole === 'workfloor_chef';
+            } else {
+                hasQcPermission = (userRole === 'supervisor' || userRole === 'quality_control' || userRole === 'workfloor_chef');
+                hasAssignPermission = (userRole === 'supervisor' || userRole === 'workfloor_chef');
+            }
+        } catch (_) {
+            hasQcPermission = (userRole === 'supervisor' || userRole === 'quality_control' || userRole === 'workfloor_chef');
+            hasAssignPermission = (userRole === 'supervisor' || userRole === 'workfloor_chef');
+        }
+
+        if (!hasQcPermission) {
+            alert('Access Restricted: Machine Workers Detailed Inspection is restricted to Quality Control and Workfloor Supervisor roles.');
+            return;
+        }
+
+        // Render machines and assigned workers
+        renderQcInspectionList(hasAssignPermission);
+        modal.style.display = 'flex';
+    });
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+    }
+}
+
+function renderQcInspectionList(hasAssignPermission) {
+    const container = document.getElementById('qcMachinesContainer');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (!state.machines || state.machines.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:24px; color:#718096;">
+                No machines configured on the workfloor.
+            </div>
+        `;
+        return;
+    }
+
+    state.machines.forEach(machine => {
+        const machineCard = document.createElement('div');
+        machineCard.style.cssText = `
+            background: #e0e5ec;
+            padding: 18px;
+            border-radius: 18px;
+            box-shadow: inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        `;
+
+        const assignedWorkers = (state.workers || []).filter(w => 
+            w.assignedMachine === machine.id || w.assignedMachine === machine.name || (machine.workers && machine.workers.includes(w.id))
+        );
+
+        let workersHTML = '';
+        if (assignedWorkers.length > 0) {
+            workersHTML = assignedWorkers.map(w => `
+                <div style="
+                    background: #e0e5ec;
+                    padding: 10px 14px;
+                    border-radius: 12px;
+                    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
+                    font-size: 13px;
+                ">
+                    <div>
+                        <span style="font-weight:700; color:#2d3748; font-size:14px;">${w.name}</span>
+                        <span style="font-family:monospace; font-weight:700; color:#3b82f6; margin-left:8px;">(ID: ${w.id || w.workerId || 'N/A'})</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; font-weight:700; background:rgba(59,130,246,0.15); color:#1d4ed8; padding:3px 8px; border-radius:8px; text-transform:uppercase;">
+                            ${w.role || 'Worker'}
+                        </span>
+                        ${hasAssignPermission ? `
+                            <button class="reassign-worker-btn" data-worker-id="${w.id}" data-machine-id="${machine.id}" style="
+                                background: #e0e5ec;
+                                border: none;
+                                padding: 4px 10px;
+                                border-radius: 8px;
+                                box-shadow: 2px 2px 4px #a3b1c6, -2px -2px 4px #ffffff;
+                                color: #ef4444;
+                                font-weight: 600;
+                                font-size: 11px;
+                                cursor: pointer;
+                            ">Reassign</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            workersHTML = `
+                <div style="color:#718096; font-size:13px; font-style:italic;">
+                    No workers currently assigned to this machine.
+                </div>
+            `;
+        }
+
+        machineCard.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(163,177,198,0.3); padding-bottom:8px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    ${machine.icon ? `<img src="${machine.icon}" style="width:24px; height:24px; object-fit:contain;" />` : ''}
+                    <span style="font-weight:800; font-size:16px; color:#2d3748;">${machine.name}</span>
+                    <span style="font-size:12px; color:#718096;">(${machine.type || 'Machine'})</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; font-weight:700; color:${getStatusColor(machine.status)}; text-transform:uppercase;">
+                        ● ${machine.status}
+                    </span>
+                    ${hasAssignPermission ? `
+                        <button class="add-machine-worker-btn" data-machine-id="${machine.id}" style="
+                            background: #3b82f6;
+                            color: #ffffff;
+                            border: none;
+                            padding: 4px 10px;
+                            border-radius: 10px;
+                            font-weight: 700;
+                            font-size: 12px;
+                            cursor: pointer;
+                            box-shadow: 2px 2px 4px #a3b1c6, -2px -2px 4px #ffffff;
+                        ">+ Give Worker</button>
+                    ` : ''}
+                </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
+                <div style="font-size:12px; font-weight:700; color:#718096;">Assigned Workers & IDs:</div>
+                ${workersHTML}
+            </div>
+        `;
+
+        container.appendChild(machineCard);
+    });
+
+    // Attach Reassign / Give Machine listeners if permitted
+    if (hasAssignPermission) {
+        container.querySelectorAll('.reassign-worker-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const workerId = btn.dataset.workerId;
+                const worker = state.workers.find(w => w.id === workerId);
+                if (worker) {
+                    worker.assignedMachine = null;
+                    alert(`Worker "${worker.name}" unassigned from machine.`);
+                    renderQcInspectionList(true);
+                }
+            });
+        });
+
+        container.querySelectorAll('.add-machine-worker-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const machineId = btn.dataset.machineId;
+                const unassigned = state.workers.filter(w => !w.assignedMachine);
+                if (unassigned.length === 0) {
+                    alert('All workers are currently assigned to machines.');
+                    return;
+                }
+
+                const workerNames = unassigned.map((w, idx) => `${idx + 1}. ${w.name} (ID: ${w.id})`).join('\n');
+                const choice = prompt(`Select worker number to assign to this machine:\n\n${workerNames}`);
+                const chosenIdx = parseInt(choice, 10) - 1;
+
+                if (unassigned[chosenIdx]) {
+                    unassigned[chosenIdx].assignedMachine = machineId;
+                    alert(`Worker "${unassigned[chosenIdx].name}" assigned to machine!`);
+                    renderQcInspectionList(true);
+                }
+            });
         });
     }
 }

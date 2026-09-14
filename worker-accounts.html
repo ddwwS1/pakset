@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pakset - Worker Accounts & Role Access Management</title>
+  <link rel="icon" type="image/png" href="assets/icons/logos/PAKSET-black-logo-e.png" />
+  <link rel="stylesheet" href="css/worker-accounts.css" />
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- Header -->
+    <header class="header">
+      <img src="assets/icons/logos/PAKSET-black-logo-e.png" alt="Pakset Logo" class="header-logo" />
+      <div class="header-text">
+        <h1>Worker Profile & Role Access Management</h1>
+        <p>Register workers, track hours & medical profiles, configure roles & permissions</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="openRolesModalBtn" class="btn btn-secondary" style="color:var(--primary);">
+          ⚙️ Manage Roles & Access
+        </button>
+        <a class="btn btn-secondary" href="workfloor.html">Back to Workfloor</a>
+        <a class="btn btn-secondary" href="schedule-editor.html">Schedule Planner</a>
+      </div>
+    </header>
+
+    <!-- Main Grid Layout -->
+    <div class="management-grid">
+
+      <!-- LEFT COLUMN: Create Worker File Form -->
+      <section class="card">
+        <div class="card-title">
+          <span>Create Worker Account File</span>
+          <span class="badge badge-supervisor">Supervisor Tool</span>
+        </div>
+
+        <div id="formAlert" class="alert"></div>
+
+        <form id="createWorkerForm" class="form-grid">
+          
+          <div class="form-group">
+            <label class="form-label" for="workerIdInput">Worker ID Number *</label>
+            <input type="text" id="workerIdInput" class="form-input" placeholder="e.g. worker-004" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="workerNameInput">Full Name *</label>
+            <input type="text" id="workerNameInput" class="form-input" placeholder="e.g. John Doe" required />
+          </div>
+
+          <div class="form-group full-width">
+            <label class="form-label" for="workerEmailInput">Email Address *</label>
+            <input type="email" id="workerEmailInput" class="form-input" placeholder="e.g. jdoe@pakset.com" required />
+          </div>
+
+          <div class="form-group full-width">
+            <label class="form-label" for="workerPasswordInput">Password *</label>
+            <input type="password" id="workerPasswordInput" class="form-input" placeholder="Min 6 characters" required minlength="6" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="workerRoleSelect">Access Role *</label>
+            <select id="workerRoleSelect" class="form-select" required>
+              <option value="worker">Worker</option>
+              <option value="workfloor_chef">Workfloor Chef</option>
+              <option value="quality_control">Quality Control</option>
+              <option value="supervisor">Workfloor Supervisor</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="workerPhoneInput">Contact Phone</label>
+            <input type="text" id="workerPhoneInput" class="form-input" placeholder="+1 234 567 890" />
+          </div>
+
+          <!-- Health & Safety -->
+          <div class="form-group">
+            <label class="form-label" for="workerDisabilitiesInput">Disability Information</label>
+            <input type="text" id="workerDisabilitiesInput" class="form-input" placeholder="None or specify details" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="workerAllergiesInput">Allergies</label>
+            <input type="text" id="workerAllergiesInput" class="form-input" placeholder="e.g. Latex, Dust, Nuts or None" />
+          </div>
+
+          <!-- Emergency Contact -->
+          <div class="form-group">
+            <label class="form-label" for="workerEmergencyNameInput">Emergency Contact Name</label>
+            <input type="text" id="workerEmergencyNameInput" class="form-input" placeholder="e.g. Jane Doe" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="workerEmergencyRelationInput">Relation</label>
+            <input type="text" id="workerEmergencyRelationInput" class="form-input" placeholder="Spouse / Parent / Sibling" />
+          </div>
+
+          <div class="form-group full-width">
+            <label class="form-label" for="workerEmergencyPhoneInput">Emergency Contact Phone</label>
+            <input type="text" id="workerEmergencyPhoneInput" class="form-input" placeholder="+1 987 654 321" />
+          </div>
+
+          <!-- Historical Factory Hours -->
+          <div class="form-group full-width">
+            <label class="form-label" for="workerTotalHoursInput">Initial Factory Hours Worked</label>
+            <input type="number" id="workerTotalHoursInput" class="form-input" placeholder="e.g. 160" value="160" />
+          </div>
+
+          <div class="form-group full-width">
+            <label class="form-label" for="workerNotesInput">Additional Info / Notes</label>
+            <textarea id="workerNotesInput" class="form-textarea" rows="2" placeholder="Certifications, safety training, comments..."></textarea>
+          </div>
+
+          <div class="form-group full-width">
+            <button type="submit" id="submitWorkerBtn" class="btn btn-primary" style="justify-content:center; padding:12px;">
+              ➕ Register & Save Worker File
+            </button>
+          </div>
+
+        </form>
+      </section>
+
+
+      <!-- RIGHT COLUMN: Compact Worker List with Dropdown Accordion -->
+      <section class="card">
+        <div class="card-title">
+          <span>Factory Workers Registry</span>
+          <span id="workerCountBadge" class="badge badge-worker">0 Workers</span>
+        </div>
+
+        <!-- Toolbar & Filter -->
+        <div class="toolbar">
+          <input type="text" id="searchWorkerInput" class="form-input search-input" placeholder="Search by ID, name, email, role, phone..." />
+          <div id="filterPillsContainer" class="filter-pills">
+            <button type="button" class="filter-chip active" data-filter="all">All</button>
+          </div>
+        </div>
+
+        <div id="listAlert" class="alert"></div>
+
+        <!-- Compact Accordion List Container -->
+        <div id="workersAccordionContainer" class="compact-accordion-list">
+          <p style="color:var(--muted); font-size:14px; text-align:center; padding:24px;">Loading factory worker files...</p>
+        </div>
+
+      </section>
+
+    </div>
+
+  </div>
+
+  <!-- EDIT WORKER MODAL -->
+  <div id="editWorkerModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="card-title">
+        <span>Edit Worker Profile & File</span>
+        <button type="button" id="closeEditModalBtn" class="btn btn-secondary" style="padding:4px 10px;">✕</button>
+      </div>
+
+      <div id="editModalAlert" class="alert"></div>
+
+      <form id="editWorkerForm" class="form-grid">
+        <input type="hidden" id="editDocId" />
+
+        <div class="form-group">
+          <label class="form-label" for="editWorkerId">Worker ID Number</label>
+          <input type="text" id="editWorkerId" class="form-input" required />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editWorkerName">Full Name</label>
+          <input type="text" id="editWorkerName" class="form-input" required />
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="editWorkerEmail">Email Address</label>
+          <input type="email" id="editWorkerEmail" class="form-input" required />
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="editWorkerPassword">New Password (Leave blank to keep existing password)</label>
+          <input type="password" id="editWorkerPassword" class="form-input" placeholder="Enter new password to reset" minlength="6" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editWorkerRole">Access Role</label>
+          <select id="editWorkerRole" class="form-select" required></select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editWorkerPhone">Phone</label>
+          <input type="text" id="editWorkerPhone" class="form-input" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editWorkerDisabilities">Disabilities</label>
+          <input type="text" id="editWorkerDisabilities" class="form-input" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editWorkerAllergies">Allergies</label>
+          <input type="text" id="editWorkerAllergies" class="form-input" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editWorkerEmergencyName">Emergency Contact Name</label>
+          <input type="text" id="editWorkerEmergencyName" class="form-input" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editWorkerEmergencyRelation">Relation</label>
+          <input type="text" id="editWorkerEmergencyRelation" class="form-input" />
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="editWorkerEmergencyPhone">Emergency Contact Phone</label>
+          <input type="text" id="editWorkerEmergencyPhone" class="form-input" />
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="editWorkerTotalHours">Total Hours Worked</label>
+          <input type="number" id="editWorkerTotalHours" class="form-input" />
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="editWorkerNotes">Additional Notes / Info</label>
+          <textarea id="editWorkerNotes" class="form-textarea" rows="2"></textarea>
+        </div>
+
+        <div class="form-group full-width">
+          <button type="submit" id="saveEditWorkerBtn" class="btn btn-primary" style="justify-content:center; padding:12px;">
+            Save Worker File Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ROLES & PERMISSIONS MODAL -->
+  <div id="rolesModal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 680px;">
+      <div class="card-title">
+        <span>Role Access & Permissions Control</span>
+        <button type="button" id="closeRolesModalBtn" class="btn btn-secondary" style="padding:4px 10px;">✕</button>
+      </div>
+
+      <div id="rolesModalAlert" class="alert"></div>
+
+      <!-- Create New Role Section -->
+      <form id="createRoleForm" class="form-grid" style="background:var(--card); padding:16px; border-radius:18px; box-shadow:var(--shadow-inset);">
+        <div class="form-group full-width" style="font-weight:700; font-size:14px; color:var(--primary);">
+          ➕ Create / Add Custom Role
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newRoleNameInput">Role Name *</label>
+          <input type="text" id="newRoleNameInput" class="form-input" placeholder="e.g. Workfloor Chef, QC Inspector" required />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newRoleDescInput">Description</label>
+          <input type="text" id="newRoleDescInput" class="form-input" placeholder="Short responsibility summary" />
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label">Role Access Permissions:</label>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
+            <label class="checkbox-group" style="padding:2px 0;">
+              <input type="checkbox" class="role-perm-cb checkbox-input" value="assign_machines" />
+              <span><strong>Reassign / Give Machines to Workers</strong> (e.g. Workfloor Chef, Supervisor)</span>
+            </label>
+            <label class="checkbox-group" style="padding:2px 0;">
+              <input type="checkbox" class="role-perm-cb checkbox-input" value="view_qc_popups" />
+              <span><strong>Access Quality Control Machine Inspection Popup</strong> (e.g. QC, Supervisor)</span>
+            </label>
+            <label class="checkbox-group" style="padding:2px 0;">
+              <input type="checkbox" class="role-perm-cb checkbox-input" value="edit_schedules" />
+              <span><strong>Access & Edit Schedule Planner</strong></span>
+            </label>
+            <label class="checkbox-group" style="padding:2px 0;">
+              <input type="checkbox" class="role-perm-cb checkbox-input" value="manage_accounts" />
+              <span><strong>Manage Worker Accounts, Files & Roles</strong></span>
+            </label>
+            <label class="checkbox-group" style="padding:2px 0;">
+              <input type="checkbox" class="role-perm-cb checkbox-input" value="manage_cafeteria" />
+              <span><strong>Manage Cafeteria, Food Breaks & Menus</strong> (e.g. Chief Cook, Supervisor)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <button type="submit" id="saveNewRoleBtn" class="btn btn-primary" style="justify-content:center; padding:10px;">
+            Save Role Definition
+          </button>
+        </div>
+      </form>
+
+      <!-- Existing Roles List -->
+      <div style="font-weight:700; font-size:14px; margin-top:8px;">Registered Roles & Access Levels:</div>
+      <div id="rolesListContainer" style="display:flex; flex-direction:column; gap:10px; max-height:260px; overflow-y:auto; padding-right:4px;">
+        <!-- Dynamically rendered -->
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/auth-guard.js"></script>
+  <script type="module" src="js/worker-accounts.js"></script>
+</body>
+</html>
+
+        <div class="form-group full-width">
+          <button type="submit" id="saveEditWorkerBtn" class="btn btn-primary" style="justify-content:center; padding:12px;">
+            Save Worker Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="js/auth-guard.js"></script>
+  <script type="module" src="js/worker-accounts.js"></script>
+</body>
+</html>

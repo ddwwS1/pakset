@@ -57,6 +57,55 @@ body {
     margin-left: auto;
     display: flex;
     align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.header-actions .form-btn,
+.header-actions a.form-btn,
+.header-actions button.form-btn {
+    height: 42px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: none;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    background: #e0e5ec;
+    color: #2d3748;
+    box-shadow: 5px 5px 10px #a3b1c6, -5px -5px 10px #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.header-actions .form-btn:hover,
+.header-actions a.form-btn:hover,
+.header-actions button.form-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 7px 7px 14px #a3b1c6, -7px -7px 14px #ffffff;
+}
+
+.header-actions .form-btn:active,
+.header-actions a.form-btn:active,
+.header-actions button.form-btn:active {
+    transform: translateY(0);
+    box-shadow: inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff;
+}
+
+.header-actions .form-btn-primary {
+    background: #3b82f6;
+    color: #ffffff;
+    box-shadow: 5px 5px 10px #a3b1c6, -5px -5px 10px #ffffff;
+}
+
+.header-actions .form-btn-primary:hover {
+    background: #2563eb;
+    color: #ffffff;
 }
 
 /* Shift Progress Bar */
@@ -118,9 +167,263 @@ body {
     height: 16px;
     background: #e0e5ec;
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: inset 4px 4px 8px #a3b1c6, inset -4px -4px 8px #ffffff;
     position: relative;
+    margin-top: 28px;
+}
+
+/* Lunch Break Pin Styles */
+.lunch-pin-wrapper {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 20;
+    pointer-events: auto;
+}
+
+.lunch-pin-badge {
+    position: absolute;
+    bottom: calc(100% + 18px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #e0e5ec;
+    color: #b45309;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 5px 12px;
+    border-radius: 14px;
+    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff, 0 0 0 1px rgba(245, 158, 11, 0.4);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* Progress Compass Scale & Scores Overlay */
+.progress-compass-overlay {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(3px);
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s ease;
+    z-index: 18;
+}
+
+.shift-progress-container:hover .progress-compass-overlay,
+.progress-bar:hover .progress-compass-overlay {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.compass-ruler-track {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+}
+
+.compass-tick {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+/* Long scores for full hours (Orange Accent) */
+.compass-tick-long {
+    height: 100%;
+    width: 2px;
+    background: #f97316;
+    box-shadow: 0 0 4px rgba(249, 115, 22, 0.5);
+    z-index: 16;
+}
+
+/* Hour time label sitting right above the long score */
+.compass-hour-label {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 800;
+    font-family: monospace;
+    color: #c05621;
+    background: #e0e5ec;
+    padding: 2px 6px;
+    border-radius: 8px;
+    white-space: nowrap;
+    letter-spacing: -0.2px;
+    box-shadow: 2px 2px 5px #a3b1c6, -2px -2px 5px #ffffff, 0 0 0 1px rgba(249, 115, 22, 0.4);
+}
+
+/* Half scores for each 10 minutes */
+.compass-tick-half {
+    height: 50%;
+    top: 50%;
+    width: 1px;
+    background: rgba(249, 115, 22, 0.5);
+    z-index: 15;
+}
+
+/* Cursor Hairline Compass Pointer */
+.compass-cursor-line {
+    position: absolute;
+    top: -6px;
+    bottom: -6px;
+    width: 2px;
+    background: #f97316;
+    z-index: 35;
+    pointer-events: none;
+    display: none;
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.9);
+    transform: translateX(-50%);
+}
+
+.compass-cursor-badge {
+    position: absolute;
+    bottom: calc(100% + 16px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #e0e5ec;
+    color: #c05621;
+    font-weight: 800;
+    font-size: 11px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 4px 10px;
+    border-radius: 12px;
+    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff, 0 0 0 1px rgba(249, 115, 22, 0.5);
+    white-space: nowrap;
+}
+    background: #e0e5ec;
+    color: #2563eb;
+    font-weight: 800;
+    font-size: 11px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 4px 10px;
+    border-radius: 12px;
+    box-shadow: 4px 4px 8px #a3b1c6, -4px -4px 8px #ffffff, 0 0 0 1px rgba(59, 130, 246, 0.5);
+    white-space: nowrap;
+}
+
+.lunch-pin-badge:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 6px 6px 12px #a3b1c6, -6px -6px 12px #ffffff, 0 0 0 2px rgba(245, 158, 11, 0.6);
+}
+
+.lunch-pin-pointer {
+    position: absolute;
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 7px solid #f59e0b;
+}
+
+/* Shift 10-Minute Hours Grid Styles */
+.shift-hours-grid-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #e0e5ec;
+    padding: 14px;
+    border-radius: 18px;
+    box-shadow: inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.shift-grid-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.shift-10min-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.tenmin-block-chip {
+    padding: 8px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    border-radius: 12px;
+    border: none;
+    background: #e0e5ec;
+    color: #2d3748;
+    box-shadow: 3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+.tenmin-block-chip:hover {
+    transform: translateY(-1px);
+    color: #3b82f6;
+    box-shadow: 1px 1px 3px #a3b1c6, -1px -1px 3px #ffffff;
+}
+
+.tenmin-block-chip.selected-boundary {
+    background: #f59e0b !important;
+    color: #ffffff !important;
+    box-shadow: inset 2px 2px 4px #b45309, inset -2px -2px 4px #fef3c7 !important;
+}
+
+.tenmin-block-chip.in-range {
+    background: rgba(245, 158, 11, 0.3) !important;
+    color: #b45309 !important;
+    box-shadow: inset 2px 2px 4px #a3b1c6, inset -2px -2px 4px #ffffff !important;
+}
+
+.lunch-bar-highlight {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(245, 158, 11, 0.55),
+      rgba(245, 158, 11, 0.55) 8px,
+      rgba(245, 158, 11, 0.2) 8px,
+      rgba(245, 158, 11, 0.2) 16px
+    );
+    background-size: 22.627px 22.627px;
+    border-left: 2px solid #f59e0b;
+    border-right: 2px solid #f59e0b;
+    border-radius: 4px;
+    pointer-events: none;
+    animation: rollStripes 0.8s linear infinite;
+}
+
+@keyframes rollStripes {
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: 22.627px 0;
+    }
 }
 
 .progress-fill {

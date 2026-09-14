@@ -18,6 +18,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <a class="btn btn-secondary" href="worker-accounts.html">Worker Accounts</a>
         <a class="btn btn-secondary" href="workfloor.html">Back to Workfloor</a>
       </div>
     </header>
@@ -120,6 +121,49 @@
         <div class="bulk-title">Apply to multiple days</div>
         <p class="bulk-help">Select multiple cells (Shift/Ctrl + click), then save once.</p>
       </div>
+
+      <div class="day-shift-panel">
+        <div class="day-shift-header">
+          <div>
+            <div class="day-shift-title">Day Shift Definitions</div>
+            <div class="day-shift-subtitle">Applies to Workfloor schedule display</div>
+          </div>
+          <label class="day-shift-toggle">
+            <input type="checkbox" id="applyDayShiftDefs" />
+            <span>Update all 3 shifts</span>
+          </label>
+        </div>
+
+        <div class="day-shift-grid">
+          <div class="day-shift-row">
+            <div class="day-shift-label">Morning</div>
+            <div class="day-shift-inputs">
+              <input type="time" id="dayMorningStart" class="input" />
+              <input type="time" id="dayMorningEnd" class="input" />
+              <input type="number" id="dayMorningDuration" class="input" min="0" step="0.5" placeholder="Hours" />
+              <input type="number" id="dayMorningOvertime" class="input" min="0" step="0.5" placeholder="OT" />
+            </div>
+          </div>
+          <div class="day-shift-row">
+            <div class="day-shift-label">Afternoon</div>
+            <div class="day-shift-inputs">
+              <input type="time" id="dayAfternoonStart" class="input" />
+              <input type="time" id="dayAfternoonEnd" class="input" />
+              <input type="number" id="dayAfternoonDuration" class="input" min="0" step="0.5" placeholder="Hours" />
+              <input type="number" id="dayAfternoonOvertime" class="input" min="0" step="0.5" placeholder="OT" />
+            </div>
+          </div>
+          <div class="day-shift-row">
+            <div class="day-shift-label">Night</div>
+            <div class="day-shift-inputs">
+              <input type="time" id="dayNightStart" class="input" />
+              <input type="time" id="dayNightEnd" class="input" />
+              <input type="number" id="dayNightDuration" class="input" min="0" step="0.5" placeholder="Hours" />
+              <input type="number" id="dayNightOvertime" class="input" min="0" step="0.5" placeholder="OT" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="details-footer">
@@ -135,6 +179,7 @@
     </div>
   </div>
 
+  <script type="module" src="js/auth-guard.js"></script>
   <script type="module" src="js/schedule-editor.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-import { db, doc, setDoc, updateDoc, deleteField, fetchAllWorkers, fetchWorkerSchedulesByWeekStarts } from './firabase.js';
+import { db, doc, getDoc, setDoc, updateDoc, deleteField, fetchAllWorkers, fetchWorkerSchedulesByWeekStarts } from './firabase.js';
 
 const ROTATION_ORDER = ['morning', 'night', 'afternoon'];
 const ANCHOR_DATE = '2026-01-18';
@@ -17,7 +17,8 @@ const state = {
   selectedCells: [],
   filter: '',
   sortBy: 'name',
-  shiftFilter: 'all'
+  shiftFilter: 'all',
+  visibleWorkers: []
 };
 
 const elements = {
@@ -44,6 +45,19 @@ const elements = {
   detailDuration: document.getElementById('detailDuration'),
   detailOvertime: document.getElementById('detailOvertime'),
   detailNotes: document.getElementById('detailNotes'),
+  applyDayShiftDefs: document.getElementById('applyDayShiftDefs'),
+  dayMorningStart: document.getElementById('dayMorningStart'),
+  dayMorningEnd: document.getElementById('dayMorningEnd'),
+  dayMorningDuration: document.getElementById('dayMorningDuration'),
+  dayMorningOvertime: document.getElementById('dayMorningOvertime'),
+  dayAfternoonStart: document.getElementById('dayAfternoonStart'),
+  dayAfternoonEnd: document.getElementById('dayAfternoonEnd'),
+  dayAfternoonDuration: document.getElementById('dayAfternoonDuration'),
+  dayAfternoonOvertime: document.getElementById('dayAfternoonOvertime'),
+  dayNightStart: document.getElementById('dayNightStart'),
+  dayNightEnd: document.getElementById('dayNightEnd'),
+  dayNightDuration: document.getElementById('dayNightDuration'),
+  dayNightOvertime: document.getElementById('dayNightOvertime'),
   closeDetails: document.getElementById('closeDetails'),
   saveDetailsBtn: document.getElementById('saveDetailsBtn'),
   resetOverrideBtn: document.getElementById('resetOverrideBtn')
@@ -153,6 +167,107 @@ function normalizeShift(shift) {
   return value ? 'custom' : 'custom';
 }
 
+function normalizeShiftKey(label) {
+  const value = String(label || '').toLowerCase();
+  if (value.includes('morning')) return 'morning';
+  if (value.includes('afternoon')) return 'afternoon';
+  if (value.includes('night')) return 'night';
+  return '';
+}
+
+function setShiftDefInputs(prefix, meta) {
+  if (!meta) return;
+  const startEl = elements[`${prefix}Start`];
+  const endEl = elements[`${prefix}End`];
+  const durationEl = elements[`${prefix}Duration`];
+  const overtimeEl = elements[`${prefix}Overtime`];
+
+  if (startEl) startEl.value = meta.start || '';
+  if (endEl) endEl.value = meta.end || '';
+  if (durationEl) durationEl.value = typeof meta.duration === 'number' ? meta.duration : '';
+  if (overtimeEl) overtimeEl.value = typeof meta.overtime === 'number' ? meta.overtime : '';
+}
+
+function readShiftDefInputs(prefix, fallback) {
+  const startEl = elements[`${prefix}Start`];
+  const endEl = elements[`${prefix}End`];
+  const durationEl = elements[`${prefix}Duration`];
+  const overtimeEl = elements[`${prefix}Overtime`];
+
+  return {
+    start: (startEl && startEl.value) ? startEl.value : fallback.start,
+    end: (endEl && endEl.value) ? endEl.value : fallback.end,
+    duration: (durationEl && durationEl.value !== '') ? Number(durationEl.value) : fallback.duration,
+    overtime: (overtimeEl && overtimeEl.value !== '') ? Number(overtimeEl.value) : fallback.overtime
+  };
+}
+
+async function loadDayShiftDefs(dateStr) {
+  const scheduleRef = doc(db, 'schedules', dateStr);
+  const meta = { morning: null, afternoon: null, night: null };
+
+  try {
+    const snap = await getDoc(scheduleRef);
+    if (snap.exists()) {
+      const data = snap.data() || {};
+      const shifts = Array.isArray(data.shifts) ? data.shifts : [];
+      shifts.forEach(sh => {
+        const key = normalizeShiftKey(sh.shift || sh.shiftName);
+        if (!key) return;
+        meta[key] = {
+          start: sh.start || '',
+          end: sh.end || '',
+          duration: (typeof sh.duration === 'number') ? sh.duration : undefined,
+          overtime: (typeof sh.overtime === 'number') ? sh.overtime : undefined
+        };
+      });
+    }
+  } catch (err) {
+    console.error('Failed to load schedule shift defs', err);
+  }
+
+  setShiftDefInputs('dayMorning', meta.morning || SHIFT_DEFS.morning);
+  setShiftDefInputs('dayAfternoon', meta.afternoon || SHIFT_DEFS.afternoon);
+  setShiftDefInputs('dayNight', meta.night || SHIFT_DEFS.night);
+}
+
+async function upsertScheduleShift(dateStr, shiftKey, meta) {
+  if (!dateStr || !shiftKey) return;
+  const scheduleRef = doc(db, 'schedules', dateStr);
+  let shifts = [];
+
+  try {
+    const snap = await getDoc(scheduleRef);
+    if (snap.exists()) {
+      const data = snap.data() || {};
+      shifts = Array.isArray(data.shifts) ? data.shifts.slice() : [];
+    }
+  } catch (err) {
+    console.error('Failed to read schedule doc', err);
+  }
+
+  const idx = shifts.findIndex(sh => normalizeShiftKey(sh.shift || sh.shiftName) === shiftKey);
+  const nextEntry = {
+    ...(idx >= 0 ? shifts[idx] : {}),
+    shift: shiftKey,
+    start: meta.start,
+    end: meta.end,
+    duration: meta.duration,
+    overtime: meta.overtime
+  };
+
+  if (idx >= 0) {
+    shifts[idx] = nextEntry;
+  } else {
+    shifts.push(nextEntry);
+  }
+
+  await setDoc(scheduleRef, {
+    date: dateStr,
+    shifts
+  }, { merge: true });
+}
+
 function buildWeekDates(weekStartStr) {
   const weekStart = parseDate(weekStartStr);
   return Array.from({ length: 7 }, (_, idx) => formatDate(addDays(weekStart, idx)));
@@ -171,10 +286,15 @@ function renderGrid() {
     const header = document.createElement('div');
     header.className = 'grid-header';
     header.dataset.colIndex = String(index + 1);
+    header.dataset.dateStr = dateStr;
     const { weekday, dayNum } = formatDayLabel(dateStr);
     header.innerHTML = `${weekday}<br><small>${dayNum}</small>`;
     const day = parseDate(dateStr).getDay();
     if (day === 0 || day === 6) header.classList.add('is-weekend');
+    header.addEventListener('click', (event) => {
+      const multi = event.ctrlKey || event.metaKey || event.shiftKey;
+      selectColumn(dateStr, multi);
+    });
     grid.appendChild(header);
   });
 
@@ -202,6 +322,8 @@ function renderGrid() {
     const nameB = (b.data && b.data.name) || b.id;
     return nameA.localeCompare(nameB);
   });
+
+  state.visibleWorkers = sortedWorkers;
 
   if (sortedWorkers.length === 0) {
     const empty = document.createElement('div');
@@ -286,6 +408,56 @@ function updateSelectionUI() {
   }
 }
 
+function getCellElement(workerId, dateStr) {
+  return document.querySelector(`.grid-cell[data-worker-id="${workerId}"][data-date-str="${dateStr}"]`);
+}
+
+function setCellSelected(cell, selected) {
+  if (!cell) return;
+  cell.classList.toggle('selected', selected);
+}
+
+function selectColumn(dateStr, multi) {
+  const workers = state.visibleWorkers || [];
+  if (workers.length === 0) return;
+
+  if (!multi) {
+    clearSelection();
+  }
+
+  const total = workers.length;
+  const selectedCount = state.selectedCells.filter(item => item.dateStr === dateStr).length;
+  const shouldDeselect = selectedCount === total && total > 0;
+
+  workers.forEach(worker => {
+    const key = `${worker.id}__${dateStr}`;
+    const idx = state.selectedCells.findIndex(item => item.key === key);
+    const cell = getCellElement(worker.id, dateStr);
+
+    if (shouldDeselect) {
+      if (idx >= 0) {
+        state.selectedCells.splice(idx, 1);
+        setCellSelected(cell, false);
+      }
+      return;
+    }
+
+    if (idx === -1) {
+      state.selectedCells.push({ key, workerId: worker.id, dateStr });
+      setCellSelected(cell, true);
+    }
+  });
+
+  if (!shouldDeselect) {
+    const firstWorker = workers[0];
+    if (firstWorker) {
+      openDetails(firstWorker.id, dateStr);
+    }
+  }
+
+  updateSelectionUI();
+}
+
 function clearSelection() {
   state.selectedCells = [];
   document.querySelectorAll('.grid-cell.selected').forEach(cell => cell.classList.remove('selected'));
@@ -334,6 +506,8 @@ function openDetails(workerId, dateStr) {
   elements.detailDuration.value = typeof dayData.duration === 'number' ? dayData.duration : '';
   elements.detailOvertime.value = typeof dayData.overtime === 'number' ? dayData.overtime : '';
   elements.detailNotes.value = dayData.notes || '';
+  if (elements.applyDayShiftDefs) elements.applyDayShiftDefs.checked = false;
+  loadDayShiftDefs(dateStr);
 
   toggleDetailFields(status === 'off');
   elements.detailsPanel.classList.add('open');
@@ -370,6 +544,8 @@ async function saveDetails() {
 
   const status = elements.detailStatus.value;
   const shiftValue = elements.detailShift.value;
+  const scheduleDatesToUpdate = new Set(targets.map(target => target.dateStr));
+  const applyDayShiftDefs = elements.applyDayShiftDefs && elements.applyDayShiftDefs.checked;
 
   setStatus('Saving...');
   try {
@@ -416,6 +592,32 @@ async function saveDetails() {
           [dateStr]: mergedDay
         }
       }, { merge: true }));
+    }
+
+    if (status !== 'off' && SHIFT_DEFS[shiftValue] && scheduleDatesToUpdate.size > 0) {
+      const fallback = SHIFT_DEFS[shiftValue];
+      const scheduleMeta = {
+        start: elements.detailStart.value || fallback.start,
+        end: elements.detailEnd.value || fallback.end,
+        duration: elements.detailDuration.value ? Number(elements.detailDuration.value) : fallback.duration,
+        overtime: elements.detailOvertime.value ? Number(elements.detailOvertime.value) : fallback.overtime
+      };
+
+      scheduleDatesToUpdate.forEach(dateStr => {
+        batchUpdates.push(upsertScheduleShift(dateStr, shiftValue, scheduleMeta));
+      });
+    }
+
+    if (applyDayShiftDefs && scheduleDatesToUpdate.size > 0) {
+      const morningMeta = readShiftDefInputs('dayMorning', SHIFT_DEFS.morning);
+      const afternoonMeta = readShiftDefInputs('dayAfternoon', SHIFT_DEFS.afternoon);
+      const nightMeta = readShiftDefInputs('dayNight', SHIFT_DEFS.night);
+
+      scheduleDatesToUpdate.forEach(dateStr => {
+        batchUpdates.push(upsertScheduleShift(dateStr, 'morning', morningMeta));
+        batchUpdates.push(upsertScheduleShift(dateStr, 'afternoon', afternoonMeta));
+        batchUpdates.push(upsertScheduleShift(dateStr, 'night', nightMeta));
+      });
     }
 
     await Promise.all(batchUpdates);

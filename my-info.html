@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pakset - My Worker Profile & Info</title>
+  <link rel="icon" type="image/png" href="assets/icons/logos/PAKSET-black-logo-e.png" />
+  <link rel="stylesheet" href="css/my-info.css" />
+</head>
+<body>
+  <div class="profile-container">
+
+    <!-- Header -->
+    <header class="header">
+      <img src="assets/icons/logos/PAKSET-black-logo-e.png" alt="Pakset Logo" class="header-logo" />
+      <div class="header-text">
+        <h1>My Personal Worker Profile</h1>
+        <p>Personal credentials, medical safety records & factory work log</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn" href="workfloor.html">Back to Workfloor</a>
+      </div>
+    </header>
+
+    <!-- ID Card Hero -->
+    <section class="id-card-hero">
+      <div id="myPhotoFrame" class="id-photo-frame">P</div>
+      <div class="id-hero-info">
+        <div id="myNameDisplay" class="id-hero-name">Worker Name</div>
+        <div class="id-hero-meta">
+          <span>Worker ID:</span>
+          <span id="myIdDisplay" class="id-code-tag">ID-000</span>
+          <span id="myRoleBadge" class="id-role-badge">WORKER</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Info Section Grid -->
+    <div class="info-section-grid">
+
+      <!-- Health & Safety -->
+      <section class="card">
+        <div class="card-title">🏥 Medical & Health Profile</div>
+        <div class="info-line">
+          <span>Disability Info:</span>
+          <strong id="myDisabilities">None</strong>
+        </div>
+        <div class="info-line">
+          <span>Allergies:</span>
+          <strong id="myAllergies">None</strong>
+        </div>
+      </section>
+
+      <!-- Emergency Contact -->
+      <section class="card">
+        <div class="card-title">🚨 Emergency Contact Information</div>
+        <div class="info-line">
+          <span>Contact Person:</span>
+          <strong id="myEmergencyName">N/A</strong>
+        </div>
+        <div class="info-line">
+          <span>Relationship:</span>
+          <strong id="myEmergencyRelation">N/A</strong>
+        </div>
+        <div class="info-line">
+          <span>Emergency Phone:</span>
+          <strong id="myEmergencyPhone">N/A</strong>
+        </div>
+      </section>
+
+      <!-- Account & Contact Details -->
+      <section class="card">
+        <div class="card-title">🔑 Account & Contact Details</div>
+        <div class="info-line">
+          <span>Email Address:</span>
+          <strong id="myEmail">N/A</strong>
+        </div>
+        <div class="info-line">
+          <span>Personal Phone:</span>
+          <strong id="myPhone">N/A</strong>
+        </div>
+        <div class="info-line" style="flex-direction:column; gap:4px; margin-top:4px;">
+          <span>File Notes / Certifications:</span>
+          <strong id="myNotes" style="font-weight:normal; font-size:13px;">None</strong>
+        </div>
+      </section>
+
+      <!-- Factory Work Log -->
+      <section class="card">
+        <div class="card-title">⏱️ Monthly Factory Hours Worked</div>
+        <table class="hours-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Hours Worked</th>
+            </tr>
+          </thead>
+          <tbody id="myMonthlyHoursBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+        <div style="font-size:14px; font-weight:800; color:var(--text); margin-top:8px;">
+          Total Factory Hours: <span id="myTotalHours" style="color:var(--primary);">0 Hours</span>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <script type="module" src="js/auth-guard.js"></script>
+  <script type="module" src="js/my-info.js"></script>
+</body>
+</html>
