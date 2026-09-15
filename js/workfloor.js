@@ -1057,6 +1057,21 @@ function renderScheduleTable(docs) {
     container.appendChild(table);
 }
 
+// Wipe all Chief Cook-assigned food breaks whenever the active shift changes
+async function clearFoodBreaksForNewShift() {
+    try {
+        const schedule = await fetchCafeteriaSchedule();
+        if (Array.isArray(schedule.breaks) && schedule.breaks.length > 0) {
+            schedule.breaks = [];
+            schedule.updatedBy = 'System (Shift Change)';
+            await saveCafeteriaSchedule(schedule);
+            updateLunchProgressMarker(schedule);
+        }
+    } catch (err) {
+        console.error('Error clearing food breaks on shift change:', err);
+    }
+}
+
 async function loadCurrentShiftFromFirestore() {
     const now = new Date();
     const prevShiftName = state.currentShiftName;
@@ -1101,6 +1116,8 @@ async function loadCurrentShiftFromFirestore() {
     if (state.shiftInitialized) {
         if (state.currentShiftName && state.currentShiftName !== prevShiftName) {
             state.shiftOverlayShiftStart = null;
+            // Food breaks are per-shift; wipe them out once the shift actually changes
+            if (prevShiftName) clearFoodBreaksForNewShift();
         }
     } else {
         state.shiftInitialized = true;

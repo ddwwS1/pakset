@@ -8,6 +8,150 @@ import {
 
 let currentUserProfile = null;
 
+// ============================================================================
+// Hidden Hardware Simulator (Dev Tools) — Shift+F1
+// Simulates the face-scan turnstile & door NFC reader until real hardware is wired in
+// ============================================================================
+const WORKER_STATUS_KEY = 'pakset_dev_worker_status';
+
+const WORKER_STATUS_CONFIG = {
+  working: { color: '#10b981', glow: 'rgba(16,185,129,0.85)', label: 'Working (on workfloor)' },
+  break:   { color: '#fb923c', glow: 'rgba(251,146,60,0.85)', label: 'On Break (left workfloor)' },
+  home:    { color: '#94a3b8', glow: 'rgba(148,163,184,0.5)', label: 'Home (not at factory)' }
+};
+
+function getWorkerStatus() {
+  const val = localStorage.getItem(WORKER_STATUS_KEY);
+  return WORKER_STATUS_CONFIG[val] ? val : 'home';
+}
+
+function setWorkerStatus(status) {
+  if (!WORKER_STATUS_CONFIG[status]) return;
+  localStorage.setItem(WORKER_STATUS_KEY, status);
+  applyWorkerStatusLed();
+}
+
+function applyWorkerStatusLed() {
+  const led = document.getElementById('workerStatusLed');
+  if (!led) return;
+  const cfg = WORKER_STATUS_CONFIG[getWorkerStatus()];
+  led.style.background = cfg.color;
+  led.style.setProperty('--led-color', cfg.color);
+  led.style.setProperty('--led-glow', cfg.glow);
+  led.title = `Live status (dev-simulated): ${cfg.label}`;
+}
+
+function injectDevToolStyles() {
+  if (document.getElementById('devToolLedStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'devToolLedStyles';
+  style.textContent = `
+    @keyframes ledPulse {
+      0%, 100% { box-shadow: 0 0 4px 1px var(--led-color), 0 0 8px 2px var(--led-glow); }
+      50% { box-shadow: 0 0 7px 2px var(--led-color), 0 0 15px 5px var(--led-glow); }
+    }
+    .worker-status-led {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: ledPulse 1.8s ease-in-out infinite;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// Registry so other page scripts (e.g. my-info.js) can inject their own simulator
+// controls into the same hidden dev tools panel without auth-guard.js knowing about them.
+window.__paksetDevToolSections = window.__paksetDevToolSections || [];
+window.registerPaksetDevToolSection = function registerPaksetDevToolSection(renderFn) {
+  window.__paksetDevToolSections.push(renderFn);
+};
+
+// Hidden dev tools panel: Shift+F1 toggles a simulator for factory hardware inputs.
+// Built to be extended later with more simulated hardware controls in the same panel.
+function toggleDevToolsPanel() {
+  let panel = document.getElementById('hiddenDevToolsPanel');
+  if (panel) {
+    panel.remove();
+    return;
+  }
+
+  panel = document.createElement('div');
+  panel.id = 'hiddenDevToolsPanel';
+  panel.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    width: 300px;
+    max-height: 80vh;
+    overflow-y: auto;
+    background: #e0e5ec;
+    padding: 16px;
+    border-radius: 18px;
+    box-shadow: 9px 9px 16px #a3b1c6, -9px -9px 16px #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #2d3748;
+  `;
+
+  panel.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <span style="font-weight:800; font-size:13px;">🛠️ Hardware Simulator</span>
+      <button id="devToolsCloseBtn" style="background:#e0e5ec; border:none; width:24px; height:24px; border-radius:8px; box-shadow:3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff; cursor:pointer; font-size:11px;">✕</button>
+    </div>
+    <div style="font-size:11px; color:#718096; margin-bottom:10px;">Simulates the facescan turnstile &amp; door NFC reader (not wired to real hardware yet).</div>
+    <div style="display:flex; flex-direction:column; gap:8px;" id="devToolsStatusOptions"></div>
+    <div id="devToolsExtraSections"></div>
+  `;
+
+  document.body.appendChild(panel);
+
+  const optionsEl = panel.querySelector('#devToolsStatusOptions');
+  const current = getWorkerStatus();
+  Object.entries(WORKER_STATUS_CONFIG).forEach(([key, cfg]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = `
+      display:flex; align-items:center; gap:8px;
+      padding:8px 10px; border:none; border-radius:12px;
+      background:#e0e5ec; cursor:pointer; font-size:12px; font-weight:700; color:#2d3748;
+      box-shadow: ${key === current ? 'inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff' : '3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff'};
+    `;
+    btn.innerHTML = `<span style="width:10px; height:10px; border-radius:50%; background:${cfg.color}; flex-shrink:0;"></span>${cfg.label}`;
+    btn.addEventListener('click', () => {
+      setWorkerStatus(key);
+      panel.remove();
+      toggleDevToolsPanel();
+    });
+    optionsEl.appendChild(btn);
+  });
+
+  panel.querySelector('#devToolsCloseBtn').addEventListener('click', () => panel.remove());
+
+  // Let other page scripts render their own simulator sections into this same panel
+  const extraEl = panel.querySelector('#devToolsExtraSections');
+  (window.__paksetDevToolSections || []).forEach(renderFn => {
+    try {
+      renderFn(extraEl, () => { panel.remove(); toggleDevToolsPanel(); });
+    } catch (err) {
+      console.error('Dev tool section render error:', err);
+    }
+  });
+
+  const footerNote = document.createElement('div');
+  footerNote.style.cssText = 'font-size:10px; color:#a0aec0; margin-top:12px; border-top:1px solid rgba(163,177,198,0.3); padding-top:8px;';
+  footerNote.textContent = 'More simulated hardware/data controls will be added here later.';
+  panel.appendChild(footerNote);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.shiftKey && e.key === 'F1') {
+    e.preventDefault();
+    toggleDevToolsPanel();
+  }
+});
+
 // Initialize Auth Guard
 function initAuthGuard() {
   const is2FAVerified = sessionStorage.getItem('pakset_2fa_verified') === 'true';
@@ -120,7 +264,10 @@ function renderUserHeaderUI(profile) {
       ">${initials}</div>
 
       <div style="display:flex; flex-direction:column; justify-content:center;">
-        <span style="font-weight:800; font-size:12px; line-height:1.2; color:#2d3748;">${name}</span>
+        <span style="font-weight:800; font-size:12px; line-height:1.2; color:#2d3748; display:flex; align-items:center; gap:5px;">
+          <span id="workerStatusLed" class="worker-status-led"></span>
+          ${name}
+        </span>
         <div style="display:flex; align-items:center; gap:6px; font-size:10px; margin-top:2px;">
           <span style="font-family:monospace; font-weight:700; color:#3b82f6;">${workerId}</span>
           <span style="color:#718096;">•</span>
@@ -145,6 +292,9 @@ function renderUserHeaderUI(profile) {
   `;
 
   headerActions.appendChild(cardContainer);
+
+  injectDevToolStyles();
+  applyWorkerStatusLed();
 
   // Click card to open personal Worker Info page
   document.getElementById('idCardClickableArea').addEventListener('click', () => {

@@ -104,8 +104,74 @@
         </div>
       </section>
 
+      <!-- Yearly Vacation Days -->
+      <section class="card">
+        <div class="card-title">
+          🏖️ Yearly Vacation Days
+          <button type="button" class="history-btn" data-history="vacation">📜 History</button>
+        </div>
+        <div class="diagram-row">
+          <div id="vacationDonut" class="donut-chart-wrap"></div>
+          <div class="diagram-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--primary);"></span>Used: <strong id="vacationUsedText">0</strong></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#cbd5e0;"></span>Remaining: <strong id="vacationRemainingText">0</strong></div>
+            <div class="legend-item">Total Allotted: <strong id="vacationTotalText">0</strong> days/year</div>
+          </div>
+        </div>
+        <form id="vacationRequestForm" class="vacation-request-form">
+          <label for="vacationDaysInput">Request Vacation Days (minimum 3)</label>
+          <div class="vacation-request-controls">
+            <input type="number" id="vacationDaysInput" min="3" step="1" value="3" required />
+            <button type="submit" class="btn btn-primary">📩 Ask to Use</button>
+          </div>
+          <div id="vacationAlert" class="alert-box" style="display:none;"></div>
+        </form>
+        <div id="vacationRequestsList" class="vacation-requests-list"></div>
+      </section>
+
+      <!-- Current Month Working / Sick Days -->
+      <section class="card">
+        <div class="card-title">
+          📅 This Month: Working &amp; Sick Days
+          <button type="button" class="history-btn" data-history="month">📜 History</button>
+        </div>
+        <div class="diagram-row">
+          <div id="monthDonut" class="donut-chart-wrap"></div>
+          <div class="diagram-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--accent);"></span>Working Days: <strong id="monthWorkingText">0</strong></div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--danger);"></span>Sick Days: <strong id="monthSickText">0</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Current Year Working / Sick Days -->
+      <section class="card">
+        <div class="card-title">
+          🗓️ This Year: Working &amp; Sick Days
+          <button type="button" class="history-btn" data-history="year">📜 History</button>
+        </div>
+        <div class="diagram-row">
+          <div id="yearDonut" class="donut-chart-wrap"></div>
+          <div class="diagram-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--accent);"></span>Working Days: <strong id="yearWorkingText">0</strong></div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--danger);"></span>Sick Days: <strong id="yearSickText">0</strong></div>
+          </div>
+        </div>
+      </section>
+
     </div>
 
+  </div>
+
+  <!-- Shared History Modal -->
+  <div id="historyModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-card-header">
+        <span id="historyModalTitle">History</span>
+        <button type="button" id="historyModalCloseBtn" class="modal-close-btn">✕</button>
+      </div>
+      <div id="historyModalBody" class="modal-card-body"></div>
+    </div>
   </div>
 
   <script type="module" src="js/auth-guard.js"></script>

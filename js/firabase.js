@@ -368,6 +368,13 @@ async function saveWorkerDoc(workerData) {
       totalHoursWorked: workerData.totalHoursWorked !== undefined ? Number(workerData.totalHoursWorked) : 480,
       notes: workerData.notes || workerData.info || '',
       status: workerData.status || 'active',
+      vacationDaysTotal: workerData.vacationDaysTotal !== undefined ? Number(workerData.vacationDaysTotal) : 20,
+      vacationDaysUsed: workerData.vacationDaysUsed !== undefined ? Number(workerData.vacationDaysUsed) : 0,
+      vacationRequests: Array.isArray(workerData.vacationRequests) ? workerData.vacationRequests : [],
+      workingDaysThisMonth: workerData.workingDaysThisMonth !== undefined ? Number(workerData.workingDaysThisMonth) : 0,
+      sickDaysThisMonth: workerData.sickDaysThisMonth !== undefined ? Number(workerData.sickDaysThisMonth) : 0,
+      workingDaysThisYear: workerData.workingDaysThisYear !== undefined ? Number(workerData.workingDaysThisYear) : 0,
+      sickDaysThisYear: workerData.sickDaysThisYear !== undefined ? Number(workerData.sickDaysThisYear) : 0,
       updatedAt: new Date().toISOString()
     };
 
